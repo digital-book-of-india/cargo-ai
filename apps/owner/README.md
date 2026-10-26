@@ -30,7 +30,6 @@ Other scripts: `npm run lint`, `npm run test`, `npm run typecheck`, `npm run bui
 | `NEXT_PUBLIC_SECURITY_REFRESH_MS` | `30000` | Security status refresh on the dashboard. |
 | `NEXT_PUBLIC_ALERTS_REFRESH_MS` | `30000` | New-alert check on the Alerts page. |
 | `NEXT_PUBLIC_NOTIFICATIONS_REFRESH_MS` | `30000` | Refresh on the Notifications page. |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | unset | Public key for browser push. Push stays off without it. Not a secret. |
 
 All of these are public (shipped to the browser). Never put a secret in a `NEXT_PUBLIC_` variable.
 
@@ -47,7 +46,7 @@ All of these are public (shipped to the browser). Never put a secret in a `NEXT_
 | `/shops/:id/cameras/:cameraId/zone` | Draw the shutter zone (0..1 polygon) |
 | `/shops/:id/alerts`, `/shops/:id/alerts/:eventId` | Alerts list, evidence viewer, review |
 | `/notifications` | What we told you, delivery status |
-| `/settings` | Profile, push notifications, notification preferences |
+| `/settings` | Profile, notification preferences |
 
 ## Rules the UI follows
 
@@ -56,7 +55,7 @@ All of these are public (shipped to the browser). Never put a secret in a `NEXT_
 - Evidence addresses are only used as `src` of an image or video.
 - Times are shown in the shop's time zone (the API sends UTC).
 - Owner-facing wording is conservative: a camera cannot guarantee detection of everything.
-- On sign out the app forgets the selected shop, zone markers and push marker for this browser.
+- On sign out the app forgets the selected shop, zone markers for this browser.
 
 ## Testing without the backend
 

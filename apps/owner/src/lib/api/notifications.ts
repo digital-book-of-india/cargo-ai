@@ -8,8 +8,6 @@ export const notificationsApi = {
     const res = await apiRequest<{ items?: AppNotification[]; notifications?: AppNotification[] }>("/notifications");
     return { notifications: res.items ?? res.notifications ?? [] };
   },
-  registerPushToken: (token: string) =>
-    apiRequest<unknown>("/notifications/push-token", { method: "POST", body: { token } }),
   // Not in the handoff catalogue yet.
   getPreferences: () => apiRequest<unknown>("/notifications/preferences"),
   updatePreferences: (prefs: NotificationPreferences) =>

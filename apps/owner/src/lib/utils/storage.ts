@@ -104,7 +104,7 @@ export function setStoredZone(cameraId: string, zone: StoredZone): void {
 }
 
 // Removes everything this app remembered in the browser for the signed-in owner (selected shop,
-// zone markers and copies, push marker). The demo database of the mock layer is kept.
+// zone markers and copies). The demo database of the mock layer is kept.
 export function clearOwnerStorage(): void {
   try {
     if (typeof window === "undefined") return;

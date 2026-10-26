@@ -253,11 +253,6 @@ export interface ReviewEventRequest {
   note?: string;
 }
 
-export interface RegisterPushTokenRequest {
-  token: string;
-  platform?: "WEB" | "ANDROID" | "IOS";
-}
-
 export interface UpdateShopStatusRequest {
   status: ShopStatus;
   reason: string;

@@ -689,23 +689,6 @@ const routes: Route[] = [
       return { preferences: db.preferences[user.id] };
     },
   },
-  {
-    method: "POST",
-    pattern: /^\/notifications\/push-token$/,
-    handle: (_m, o) => {
-      requireUser();
-      if (!String(asRecord(o.body).token ?? "").trim()) {
-        fail(400, "VALIDATION_ERROR", "A push token is required.");
-      }
-      const db = getDb();
-      db.pushTokens = { ...(db.pushTokens ?? {}), [getDb().sessionUserId ?? "?"]: Date.now() };
-      saveDb();
-      return {
-        status: "REGISTERED",
-        message: "Push token registered successfully. (Push provider pending credentials)",
-      };
-    },
-  },
 ];
 
 export async function mockRequest<T>(path: string, options: MockOptions): Promise<T> {

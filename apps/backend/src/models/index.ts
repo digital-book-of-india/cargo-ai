@@ -9,5 +9,4 @@ export * from "./SecurityEvent";
 export * from "./Notification";
 export * from "./AuditLog";
 export * from "./AiWorkerHealth";
-export * from "./NotificationPreference";
-export * from "./PushToken";
+export * from "./NotificationPreference";

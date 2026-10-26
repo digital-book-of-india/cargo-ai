@@ -1,47 +1,9 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { pushTokenSchema, notificationPreferencesSchema } from "@dbi/validation";
-import { NotificationModel, PushTokenModel, NotificationPreferenceModel } from "../../../models";
+import { notificationPreferencesSchema } from "@dbi/validation";
+import { NotificationModel, NotificationPreferenceModel } from "../../../models";
 import { authenticate } from "../../../middleware/auth";
 
 export const notificationsRouter = Router();
-
-// POST /api/v1/notifications/push-token
-notificationsRouter.post(
-  "/push-token",
-  authenticate,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const parseResult = pushTokenSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parseResult.error.errors[0]?.message ?? "Invalid push token",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-
-      await PushTokenModel.findOneAndUpdate(
-        { userId: req.user!.id, token: parseResult.data.token },
-        { platform: parseResult.data.platform ?? "WEB" },
-        { upsert: true, new: true }
-      );
-
-      // FCM delivery is not wired up yet (no Firebase project credentials); the token is
-      // persisted so it is ready the moment a provider is configured.
-      res.json({
-        data: {
-          status: "REGISTERED",
-          message: "Push token registered successfully. (Push provider pending credentials)",
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-);
 
 // GET /api/v1/notifications
 notificationsRouter.get(

@@ -53,8 +53,6 @@ export interface MockDb {
   aiWorkerState?: string;
   /** notification preferences by user id */
   preferences?: Record<string, unknown>;
-  /** push tokens registered by user id (the token itself is never returned) */
-  pushTokens?: Record<string, number>;
   cameras: MockCamera[];
   zones: Record<string, Zone>;
   events: SecurityEvent[];

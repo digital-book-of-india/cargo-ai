@@ -89,11 +89,6 @@ export const updateShopStatusSchema = z.object({
   reason: z.string().trim().min(1, "Reason is required"),
 });
 
-export const pushTokenSchema = z.object({
-  token: z.string().trim().min(1, "Push token is required"),
-  platform: z.enum(["WEB", "ANDROID", "IOS"]).optional(),
-});
-
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty").optional(),
 });

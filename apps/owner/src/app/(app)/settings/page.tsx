@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { PreferencesCard } from "@/components/settings/PreferencesCard";
 import { PrivacyCard } from "@/components/settings/PrivacyCard";
 import { ProfileCard } from "@/components/settings/ProfileCard";
-import { PushCard } from "@/components/settings/PushCard";
 import { Button, Card } from "@/components/ui";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useShop } from "@/lib/shop/ShopProvider";
@@ -27,7 +26,6 @@ export default function SettingsPage() {
       <PageHeader title="Settings" description="Your profile and how we notify you." />
       <div className="mx-auto max-w-2xl space-y-5">
         <ProfileCard />
-        <PushCard />
         <PreferencesCard />
         <PrivacyCard />
 

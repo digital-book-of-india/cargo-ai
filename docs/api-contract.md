@@ -63,7 +63,6 @@
 
 | Method | Endpoint | Purpose | Access |
 |---|---|---|---|
-| `POST` | `/notifications/push-token` | Register push token for browser/mobile | Authenticated |
 | `GET` | `/notifications` | List recent in-app notifications | Authenticated |
 
 ### 7. Internal AI Service (`/internal/v1/ai`)
