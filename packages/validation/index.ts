@@ -53,7 +53,6 @@ export const zoneSchema = z.object({
 
 export const cameraRegisterSchema = z.object({
   name: z.string().trim().min(1, "Camera name is required"),
-  connectorId: z.string().trim().min(1).optional(),
   protocol: z.enum(["RTSP", "ONVIF"]),
   host: z.string().trim().min(1, "Camera host or IP is required"),
   port: z.number().int().min(1).max(65535).optional(),
@@ -64,7 +63,6 @@ export const cameraRegisterSchema = z.object({
 
 export const cameraUpdateSchema = z.object({
   name: z.string().trim().min(1).optional(),
-  connectorId: z.string().trim().min(1).nullable().optional(),
   protocol: z.enum(["RTSP", "ONVIF"]).optional(),
   host: z.string().trim().min(1).optional(),
   port: z.number().int().min(1).max(65535).optional(),
@@ -73,18 +71,7 @@ export const cameraUpdateSchema = z.object({
   path: z.string().trim().optional(),
 });
 
-export const createConnectorSchema = z.object({
-  name: z.string().trim().min(1, "Connector name is required"),
-});
 
-export const pairConnectorSchema = z.object({
-  pairingCode: z.string().trim().min(1, "Pairing code is required"),
-});
-
-export const connectorHeartbeatSchema = z.object({
-  version: z.string().trim().min(1, "version is required"),
-  activeCameraCount: z.number().int().nonnegative().optional(),
-});
 
 export const manualOverrideSchema = z.object({
   action: z.enum(["ARM", "DISARM"]),

@@ -12,10 +12,6 @@ declare global {
         name?: string;
       };
       serviceName?: string;
-      connector?: {
-        id: string;
-        shopId: string;
-      };
     }
   }
 }

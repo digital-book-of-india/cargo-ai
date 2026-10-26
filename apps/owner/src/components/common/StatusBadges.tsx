@@ -3,7 +3,6 @@ import type { BadgeTone } from "@/components/ui/Badge";
 import { MONITORING_COPY } from "@/lib/security";
 import type {
   CameraStatus,
-  Connector,
   EventType,
   MonitoringState,
   ReviewStatus,
@@ -38,15 +37,6 @@ export function CameraStatusBadge({ status }: { status: CameraStatus }) {
       {c.label}
     </Badge>
   );
-}
-
-// A connector that has never paired reads "Pairing pending" even though its stored
-// status is PENDING, so it's not confused with a paired-but-currently-offline PC.
-export function ConnectorStatusBadge({ connector }: { connector: Connector }) {
-  if (connector.status === "REVOKED") return <Badge tone="danger" dot>Revoked</Badge>;
-  if (connector.status === "PENDING") return <Badge tone="warning" dot>Pairing pending</Badge>;
-  if (connector.online) return <Badge tone="success" dot>Online</Badge>;
-  return <Badge tone="danger" dot>Offline</Badge>;
 }
 
 const review: Record<ReviewStatus, { label: string; tone: BadgeTone }> = {

@@ -61,15 +61,11 @@ All of these are public (shipped to the browser). Never put a secret in a `NEXT_
 ## Testing without the backend
 
 The mock layer (`src/mocks`) implements every owner endpoint with DEMO data and the honest status
-rules. See `CONTEXT.md` section "Testing without the real backend" for the cheat sheet (addresses
-containing `offline`, `error`, `slow` change the test outcome).
+rules. Camera addresses containing `offline`, `error` or `slow` change the mock test outcome.
 
 ## Status and known gaps
 
-All owner screens are built and verified against local mock responses and an automated unit test suite (`npm run test`). Live end-to-end integration against the real backend is pending startup resolution. Open contract questions and requests
-for Dev 3 are in `docs/gaps/dev1-owner.md` (evidence URL, zone read, camera snapshot, delete
-camera, override body, preferences and profile endpoints, `overrideUntil`, `shopId` on
-notifications, pagination format).
+All owner screens are built and verified against local mock responses and an automated unit test suite (`npm run test`). Live end-to-end integration against the real backend is pending startup resolution.
 
 Accessibility: DOM audit passes (names, labels, one `h1`, skip link, focus ring, reduced motion,
 AA contrast for the design tokens). Not yet done: screen-reader pass and keyboard walkthrough on a

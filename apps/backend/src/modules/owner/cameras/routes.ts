@@ -42,12 +42,11 @@ shopCamerasRouter.post(
         return;
       }
 
-      const { name, connectorId, protocol, host, port, username, password, path } = parseResult.data;
+      const { name, protocol, host, port, username, password, path } = parseResult.data;
       const streamUrl = buildRtspUrl({ protocol, host, port, username, password, path });
 
       const camera = await CameraModel.create({
         shopId: shop._id,
-        connectorId: connectorId ?? null,
         name,
         protocol,
         secretRef: encryptSecret(streamUrl),
@@ -204,9 +203,8 @@ cameraRouter.patch(
         return;
       }
 
-      const { name, connectorId, protocol, host, port, username, password, path } = parseResult.data;
+      const { name, protocol, host, port, username, password, path } = parseResult.data;
       if (name) camera.name = name;
-      if (connectorId !== undefined) camera.connectorId = connectorId ? (connectorId as any) : null;
       if (protocol) camera.protocol = protocol;
       if (host) {
         const streamUrl = buildRtspUrl({

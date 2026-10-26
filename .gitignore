@@ -48,5 +48,3 @@ Thumbs.db
 # temporary scratchpad
 scratch/
 
-# generated at build time by apps/connector/scripts/write-runtime-config.js
-apps/connector/src/lib/runtime-config.json

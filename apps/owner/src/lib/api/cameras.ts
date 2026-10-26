@@ -8,7 +8,6 @@ export const camerasApi = {
     shopId: string,
     input: {
       name: string;
-      connectorId?: string;
       protocol: "RTSP" | "ONVIF";
       host: string;
       port?: number;
@@ -41,7 +40,6 @@ export const camerasApi = {
     cameraId: string,
     input: Partial<{
       name: string;
-      connectorId: string | null;
       host: string;
       port: number;
       username: string;

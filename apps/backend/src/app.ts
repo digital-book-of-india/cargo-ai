@@ -8,7 +8,6 @@ import { authRouter } from "./modules/auth/routes";
 import { shopsRouter } from "./modules/owner/shops/routes";
 import { schedulesRouter } from "./modules/owner/schedules/routes";
 import { shopCamerasRouter, cameraRouter } from "./modules/owner/cameras/routes";
-import { shopConnectorsRouter, connectorRouter } from "./modules/owner/connectors/routes";
 import { shopEventsRouter, eventRouter } from "./modules/owner/events/routes";
 import { notificationsRouter } from "./modules/owner/notifications/routes";
 import { evidenceRouter } from "./modules/evidence/routes";
@@ -21,8 +20,6 @@ import { aiEventsRouter } from "./modules/internal/ai-events/routes";
 import { aiHealthRouter } from "./modules/internal/ai-health/routes";
 import { internalCamerasRouter } from "./modules/internal/cameras/routes";
 import { evidenceUploadRouter } from "./modules/internal/evidence-upload/routes";
-import { connectorPairingRouter, connectorDeviceRouter } from "./modules/internal/connectors/routes";
-import { connectorAuth } from "./middleware/connectorAuth";
 
 export const app = express();
 
@@ -103,8 +100,6 @@ v1.use("/shops", shopsRouter);
 v1.use("/shops", schedulesRouter);
 v1.use("/shops", shopCamerasRouter);
 v1.use("/cameras", cameraRouter);
-v1.use("/shops", shopConnectorsRouter);
-v1.use("/connectors", connectorRouter);
 v1.use("/shops", shopEventsRouter);
 v1.use("/events", eventRouter);
 v1.use("/notifications", notificationsRouter);
@@ -126,21 +121,7 @@ internal.use("/ai/health", aiHealthRouter);
 internal.use("/cameras", internalCamerasRouter);
 internal.use("/evidence", evidenceUploadRouter);
 
-// 6b. Per-connector-secret router (Connector desktop app) - deliberately NOT inside the
-// `internal` group above, since that group is hardwired to the single shared
-// AI_SERVICE_TOKEN. The pairing route has no auth (it's how a connector proves a one-time
-// pairing code instead); every other connector route requires its own connector token.
-const connectorDevice = express.Router();
-connectorDevice.use(connectorAuth);
-connectorDevice.use("/", connectorDeviceRouter);
-
 app.use("/api/v1", v1);
-// Must be mounted BEFORE the broad "/internal/v1" group below: Express tries routers in
-// registration order, and `internal` runs serviceAuth unconditionally for every path under
-// "/internal/v1" (including "/internal/v1/connectors/*") before it ever gets a chance to
-// find that it has no matching route there - so it would 401 every connector request first.
-app.use("/internal/v1/connectors", connectorPairingRouter);
-app.use("/internal/v1/connectors", connectorDevice);
 app.use("/internal/v1", internal);
 
 // 7. Global Error Handler

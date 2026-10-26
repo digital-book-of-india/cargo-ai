@@ -67,7 +67,6 @@ export type CameraStatus = "PENDING_TEST" | "ONLINE" | "OFFLINE" | "ERROR";
 export interface Camera {
   id: string;
   shopId: string;
-  connectorId?: string | null;
   name: string;
   protocol: "RTSP" | "ONVIF";
   status: CameraStatus;
@@ -75,27 +74,6 @@ export interface Camera {
   lastHealthAt?: string | null;
   lastErrorCode?: string | null;
   createdAt?: string;
-}
-
-export type ConnectorStatus = "PENDING" | "PAIRED" | "REVOKED";
-
-// Safe fields only. Never the pairing code or connector token.
-export interface Connector {
-  id: string;
-  shopId: string;
-  name: string;
-  status: ConnectorStatus;
-  online: boolean; // derived: status === "PAIRED" && lastHeartbeatAt within the stale threshold
-  lastHeartbeatAt: string | null;
-  lastSeenVersion: string | null;
-  activeCameraCount: number;
-  createdAt?: string;
-}
-
-// Returned once, right after creation - this is the only time the pairing code is exposed.
-export interface ConnectorWithPairingCode extends Connector {
-  pairingCode: string;
-  pairingCodeExpiresAt: string;
 }
 
 export interface Point {
@@ -239,7 +217,6 @@ export interface UpdateScheduleRequest {
 
 export interface RegisterCameraRequest {
   name: string;
-  connectorId?: string;
   protocol: "RTSP" | "ONVIF";
   host: string;
   port?: number;
@@ -250,44 +227,12 @@ export interface RegisterCameraRequest {
 
 export interface UpdateCameraRequest {
   name?: string;
-  connectorId?: string | null;
   protocol?: "RTSP" | "ONVIF";
   host?: string;
   port?: number;
   username?: string;
   password?: string;
   path?: string;
-}
-
-export interface CreateConnectorRequest {
-  name: string;
-}
-
-// POST /internal/v1/connectors/pair - exchanges a one-time pairing code for a connector token.
-export interface PairConnectorRequest {
-  pairingCode: string;
-}
-
-export interface PairConnectorResponse {
-  connectorId: string;
-  connectorToken: string;
-  shopId: string;
-  shopName: string;
-}
-
-export interface ConnectorHeartbeatRequest {
-  version: string;
-  activeCameraCount?: number;
-}
-
-// What a paired Connector fetches to know which cameras to run and how to reach them.
-// cameraId doubles as the "device key" the Connector attaches to attendance detections.
-export interface ConnectorCamera {
-  cameraId: string;
-  shopId: string;
-  name: string;
-  protocol: "RTSP" | "ONVIF";
-  streamUrl: string;
 }
 
 export interface SaveZoneRequest {

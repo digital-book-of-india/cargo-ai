@@ -4,7 +4,6 @@ import {
   Camera,
   LayoutDashboard,
   ListChecks,
-  Router,
   Settings,
   ShieldAlert,
   Store,
@@ -39,7 +38,6 @@ export function buildNav(shopId: string | null): NavGroups {
         { href: `/shops/${shopId}`, label: "Shop profile", icon: Store, exact: true },
         { href: `/shops/${shopId}/schedule`, label: "Opening hours", icon: CalendarClock },
         { href: `/shops/${shopId}/cameras`, label: "Cameras", icon: Camera },
-        { href: `/shops/${shopId}/connectors`, label: "Connectors", icon: Router },
         { href: `/shops/${shopId}/alerts`, label: "Alerts", icon: ShieldAlert },
       ]
     : [];

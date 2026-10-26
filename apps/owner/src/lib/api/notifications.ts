@@ -10,7 +10,7 @@ export const notificationsApi = {
   },
   registerPushToken: (token: string) =>
     apiRequest<unknown>("/notifications/push-token", { method: "POST", body: { token } }),
-  // Not in the handoff catalogue yet (see docs/gaps/dev1-owner.md).
+  // Not in the handoff catalogue yet.
   getPreferences: () => apiRequest<unknown>("/notifications/preferences"),
   updatePreferences: (prefs: NotificationPreferences) =>
     apiRequest<unknown>("/notifications/preferences", { method: "PUT", body: prefs }),

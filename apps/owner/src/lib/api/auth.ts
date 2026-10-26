@@ -8,7 +8,7 @@ export const authApi = {
     apiRequest<{ user: User }>("/auth/login", { method: "POST", body: input }),
   logout: () => apiRequest<null>("/auth/logout", { method: "POST" }),
   me: () => apiRequest<{ user: User }>("/auth/me"),
-  // Not in the handoff catalogue yet (see docs/gaps/dev1-owner.md).
+  // Not in the handoff catalogue yet.
   updateProfile: (input: { name: string }) =>
     apiRequest<{ user: User }>("/auth/me", { method: "PATCH", body: input }),
 };

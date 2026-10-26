@@ -4,7 +4,6 @@ import type {
   AppNotification,
   Camera,
   CameraStatus,
-  Connector,
   Day,
   DaySchedule,
   Schedule,
@@ -37,12 +36,6 @@ export interface MockCamera extends Camera {
   testSlow?: boolean;
 }
 
-// Mirrors the real Connector document, minus the hashed token (never kept in the mock).
-export interface MockConnector extends Omit<Connector, "online"> {
-  pairingCode: string | null;
-  pairingCodeExpiresAt: string | null;
-}
-
 export interface MockOverride {
   state: "ARMED" | "DISARMED";
   until: string; // UTC ISO-8601
@@ -63,7 +56,6 @@ export interface MockDb {
   /** push tokens registered by user id (the token itself is never returned) */
   pushTokens?: Record<string, number>;
   cameras: MockCamera[];
-  connectors: MockConnector[];
   zones: Record<string, Zone>;
   events: SecurityEvent[];
   eventsSeeded: Record<string, boolean>;
@@ -122,7 +114,6 @@ function freshDb(): MockDb {
     schedules: { shop_demo: defaultSchedule("shop_demo") },
     overrides: {},
     cameras: [],
-    connectors: [],
     zones: {},
     events: [],
     eventsSeeded: {},
@@ -153,7 +144,6 @@ export function getDb(): MockDb {
     const raw = typeof window !== "undefined" ? window.sessionStorage.getItem(KEY) : null;
     if (raw) {
       db = JSON.parse(raw) as MockDb;
-      db.connectors ??= []; // older sessions saved before Connectors existed
       return db;
     }
   } catch {

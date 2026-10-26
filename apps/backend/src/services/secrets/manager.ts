@@ -75,7 +75,6 @@ export function sanitizeCamera(cam: ICameraDocument | any): Camera {
   return {
     id: cam._id ? cam._id.toString() : String(cam.id),
     shopId: cam.shopId ? cam.shopId.toString() : String(cam.shopId),
-    connectorId: cam.connectorId ? cam.connectorId.toString() : null,
     name: cam.name,
     protocol: cam.protocol,
     status: cam.status,

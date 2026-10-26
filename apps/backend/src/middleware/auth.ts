@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { Role } from "@dbi/api-types";
 import { verifyAccessToken } from "../utils/auth";
-import { ShopModel, CameraModel, ConnectorModel } from "../models";
+import { ShopModel, CameraModel } from "../models";
 
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
@@ -119,75 +119,6 @@ export async function requireShopAccess(
         error: {
           code: "FORBIDDEN",
           message: "You do not have access to this shop.",
-          requestId: req.requestId,
-        },
-      });
-      return;
-    }
-
-    next();
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function requireConnectorAccess(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  if (!req.user) {
-    res.status(401).json({
-      error: {
-        code: "UNAUTHORIZED",
-        message: "Authentication required.",
-        requestId: req.requestId,
-      },
-    });
-    return;
-  }
-
-  const connectorId = req.params.connectorId;
-  if (!connectorId) {
-    next();
-    return;
-  }
-
-  if (req.user.role === "SUPER_ADMIN") {
-    next();
-    return;
-  }
-
-  try {
-    const connector = await ConnectorModel.findById(connectorId).select("shopId");
-    if (!connector) {
-      res.status(404).json({
-        error: {
-          code: "NOT_FOUND",
-          message: "Connector not found.",
-          requestId: req.requestId,
-        },
-      });
-      return;
-    }
-
-    const shop = await ShopModel.findById(connector.shopId).select("ownerId");
-    if (!shop) {
-      res.status(404).json({
-        error: {
-          code: "NOT_FOUND",
-          message: "Shop for connector not found.",
-          requestId: req.requestId,
-        },
-      });
-      return;
-    }
-
-    if (shop.ownerId.toString() !== req.user.id) {
-      res.status(403).json({
-        error: {
-          code: "FORBIDDEN",
-          message: "You do not have access to this connector.",
           requestId: req.requestId,
         },
       });

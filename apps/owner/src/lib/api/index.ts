@@ -3,6 +3,5 @@ export { authApi } from "./auth";
 export { shopsApi } from "./shops";
 export { scheduleApi } from "./schedule";
 export { camerasApi } from "./cameras";
-export { connectorsApi } from "./connectors";
 export { eventsApi } from "./events";
 export { notificationsApi } from "./notifications";

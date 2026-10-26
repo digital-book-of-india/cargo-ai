@@ -15,15 +15,13 @@ import {
   SelectField,
   TextField,
 } from "@/components/ui";
-import { connectorsApi } from "@/lib/api/connectors";
 import { friendlyMessage } from "@/lib/api/messages";
 import { checkHost, checkPort } from "@/lib/camera";
 import { CONSENT_LABEL, PRIVACY_POINTS } from "@/lib/privacy";
-import type { Camera, Connector } from "@/types";
+import type { Camera } from "@/types";
 
 export interface CameraFormValues {
   name: string;
-  connectorId?: string | null;
   protocol: "RTSP" | "ONVIF";
   /** empty string when editing and the connection is left unchanged */
   host: string;
@@ -47,8 +45,6 @@ interface Props {
 export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit }: Props) {
   const editing = !!camera;
   const [name, setName] = useState("");
-  const [connectorId, setConnectorId] = useState<string>("");
-  const [connectors, setConnectors] = useState<Connector[]>([]);
   const [protocol, setProtocol] = useState<"RTSP" | "ONVIF">("RTSP");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
@@ -63,7 +59,6 @@ export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit 
   useEffect(() => {
     if (!open) return;
     setName(camera?.name ?? "");
-    setConnectorId(camera?.connectorId ?? "");
     setProtocol(camera?.protocol ?? "RTSP");
     setHost("");
     setPort("");
@@ -74,10 +69,6 @@ export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit 
     setFormError(null);
     setSubmitting(false);
     setConsent(false);
-    connectorsApi
-      .list(shopId)
-      .then((res) => setConnectors(res.connectors))
-      .catch(() => setConnectors([]));
   }, [open, camera, shopId]);
 
   async function handleSubmit(e: FormEvent) {
@@ -117,7 +108,6 @@ export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit 
     try {
       await onSubmit({
         name: name.trim(),
-        connectorId: connectorId || null,
         protocol,
         host: hostValue,
         port: portValue,
@@ -161,25 +151,6 @@ export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit 
               value={name}
               onChange={(e) => setName(e.target.value)}
               error={errors.name}
-              disabled={submitting}
-            />
-
-            <SelectField
-              label="Connector (site PC)"
-              value={connectorId || "__none"}
-              onValueChange={(v) => setConnectorId(v === "__none" ? "" : v)}
-              options={[
-                { value: "__none", label: "Not assigned yet" },
-                ...connectors.map((c) => ({
-                  value: c.id,
-                  label: `${c.name}${c.online ? " (online)" : ""}`,
-                })),
-              ]}
-              hint={
-                connectors.length === 0
-                  ? "No connectors yet - create one from the Connectors page first."
-                  : "The on-site PC that will pull this camera's stream."
-              }
               disabled={submitting}
             />
 

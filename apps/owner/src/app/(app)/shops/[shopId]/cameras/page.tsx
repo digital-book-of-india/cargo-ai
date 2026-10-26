@@ -170,7 +170,6 @@ export default function CamerasPage() {
     if (editing) {
       await camerasApi.update(editing.id, {
         name: values.name,
-        connectorId: values.connectorId ?? undefined,
         ...(values.host
           ? {
               host: values.host,
@@ -187,7 +186,6 @@ export default function CamerasPage() {
     } else {
       await camerasApi.register(shopId, {
         name: values.name,
-        connectorId: values.connectorId ?? undefined,
         protocol: values.protocol,
         host: values.host,
         port: values.port,

@@ -14,7 +14,5 @@ export const env = {
     process.env.CAMERA_SECRET_ENCRYPTION_KEY ||
     process.env.JWT_ACCESS_SECRET ||
     "default_camera_secret_key_12345",
-  connectorPairingCodeTtlMinutes: Number(process.env.CONNECTOR_PAIRING_CODE_TTL_MINUTES ?? 10),
-  connectorStaleSeconds: Number(process.env.CONNECTOR_STALE_SECONDS ?? 150),
 };
 

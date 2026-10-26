@@ -25,7 +25,7 @@ import type {
   Zone,
 } from "@/types";
 import { defaultSchedule, getDb, hashPassword, nextId, saveDb } from "./store";
-import type { MockCamera, MockConnector } from "./store";
+import type { MockCamera } from "./store";
 import { isOpenAt, nextTransitionAt } from "./transition";
 import type { MockException } from "./transition";
 
@@ -73,50 +73,11 @@ function requireCamera(cameraId: string): MockCamera {
   return camera;
 }
 
-function requireConnector(connectorId: string): MockConnector {
-  const connector = getDb().connectors.find((c) => c.id === connectorId);
-  if (!connector) fail(404, "NOT_FOUND", "Connector not found.");
-  requireShop(connector.shopId);
-  return connector;
-}
-
-function connectorIsOnline(c: MockConnector): boolean {
-  if (c.status !== "PAIRED" || !c.lastHeartbeatAt) return false;
-  return Date.now() - new Date(c.lastHeartbeatAt).getTime() <= 150_000;
-}
-
-function toConnector(c: MockConnector) {
-  // Safe fields only: never the pairing code outside the create/regenerate response.
-  return {
-    id: c.id,
-    shopId: c.shopId,
-    name: c.name,
-    status: c.status,
-    online: connectorIsOnline(c),
-    lastHeartbeatAt: c.lastHeartbeatAt,
-    lastSeenVersion: c.lastSeenVersion,
-    activeCameraCount: c.activeCameraCount,
-    createdAt: c.createdAt,
-  };
-}
-
-function toConnectorWithPairingCode(c: MockConnector) {
-  return { ...toConnector(c), pairingCode: c.pairingCode, pairingCodeExpiresAt: c.pairingCodeExpiresAt };
-}
-
-function generateMockPairingCode(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const pick = () => alphabet[Math.floor(Math.random() * alphabet.length)];
-  const part = () => Array.from({ length: 4 }, pick).join("");
-  return `${part()}-${part()}`;
-}
-
 function toCamera(c: MockCamera): Camera {
   // Safe fields only: never the stream URL or credentials.
   return {
     id: c.id,
     shopId: c.shopId,
-    connectorId: c.connectorId ?? null,
     name: c.name,
     protocol: c.protocol,
     status: c.status,
@@ -508,11 +469,9 @@ const routes: Route[] = [
         fail(400, "VALIDATION_ERROR", "Stream URL must start with rtsp:// or rtsps://.");
       }
       const { outcome, slow } = testBehaviour(url);
-      const connectorId = typeof b.connectorId === "string" && b.connectorId ? b.connectorId : null;
       const camera: MockCamera = {
         id: nextId("cam"),
         shopId: shop.id,
-        connectorId,
         name,
         protocol,
         status: "PENDING_TEST",
@@ -567,7 +526,6 @@ const routes: Route[] = [
       const camera = requireCamera(m[1]);
       const b = asRecord(o.body);
       if (typeof b.name === "string" && b.name.trim()) camera.name = b.name.trim();
-      if ("connectorId" in b) camera.connectorId = typeof b.connectorId === "string" && b.connectorId ? b.connectorId : null;
       if (typeof b.streamUrl === "string" && b.streamUrl.trim()) {
         const url = b.streamUrl.trim();
         if (!/^rtsps?:\/\//i.test(url)) {
@@ -624,64 +582,6 @@ const routes: Route[] = [
     },
   },
 
-  // connectors
-  {
-    method: "POST",
-    pattern: /^\/shops\/([^/]+)\/connectors$/,
-    handle: (m, o) => {
-      const shop = requireShop(m[1]);
-      const b = asRecord(o.body);
-      const name = String(b.name ?? "").trim();
-      if (!name) fail(400, "VALIDATION_ERROR", "Connector name is required.");
-      const connector: MockConnector = {
-        id: nextId("conn"),
-        shopId: shop.id,
-        name,
-        status: "PENDING",
-        lastHeartbeatAt: null,
-        lastSeenVersion: null,
-        activeCameraCount: 0,
-        createdAt: new Date().toISOString(),
-        pairingCode: generateMockPairingCode(),
-        pairingCodeExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
-      };
-      getDb().connectors.push(connector);
-      saveDb();
-      return { connector: toConnectorWithPairingCode(connector) };
-    },
-  },
-  {
-    method: "GET",
-    pattern: /^\/shops\/([^/]+)\/connectors$/,
-    handle: (m) => {
-      const shop = requireShop(m[1]);
-      return { items: getDb().connectors.filter((c) => c.shopId === shop.id).map(toConnector) };
-    },
-  },
-  {
-    method: "POST",
-    pattern: /^\/connectors\/([^/]+)\/pairing-code$/,
-    handle: (m) => {
-      const connector = requireConnector(m[1]);
-      connector.status = "PENDING";
-      connector.pairingCode = generateMockPairingCode();
-      connector.pairingCodeExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
-      saveDb();
-      return { connector: toConnectorWithPairingCode(connector) };
-    },
-  },
-  {
-    method: "DELETE",
-    pattern: /^\/connectors\/([^/]+)$/,
-    handle: (m) => {
-      const connector = requireConnector(m[1]);
-      connector.status = "REVOKED";
-      connector.pairingCode = null;
-      connector.pairingCodeExpiresAt = null;
-      saveDb();
-      return null;
-    },
-  },
 
   // events
   {
