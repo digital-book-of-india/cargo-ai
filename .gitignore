@@ -1,0 +1,52 @@
+# dependencies
+node_modules
+
+# build output
+.next
+.next-*
+out
+dist
+build
+coverage
+*.tsbuildinfo
+next-env.d.ts
+.turbo
+
+# env / secrets (keep the .example templates)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# python
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+
+# local runtime data (evidence snapshots/clips must never be committed)
+uploads
+apps/backend/storage/evidence
+*.mp4
+*.avi
+*.mkv
+
+# logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# temporary scratchpad
+scratch/
+
+# generated at build time by apps/connector/scripts/write-runtime-config.js
+apps/connector/src/lib/runtime-config.json

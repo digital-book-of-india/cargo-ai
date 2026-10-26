@@ -1,0 +1,62 @@
+@import "../../../../packages/ui/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%; /* #0F172A */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%; /* #2563EB */
+    --primary-dark: 224 76% 48%; /* #1D4ED8 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 100% 97%; /* #EFF6FF */
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 98%;
+    --muted-foreground: 215 16% 42%;
+    --accent: 214 100% 97%; /* #EFF6FF */
+    --accent-foreground: 221 83% 40%;
+    --destructive: 0 72% 44%; /* #C01F1F: #DC2626 darkened so text on its tinted background passes 4.5:1 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 76% 26%; /* #16A34A family, darkened so text on tints passes 4.5:1 */
+    --success-foreground: 0 0% 100%;
+    --warning: 28 90% 31%; /* #D97706 family, darkened so text on tints passes 4.5:1 */
+    --warning-foreground: 0 0% 100%;
+    --border: 214 95% 93%; /* #DBEAFE */
+    --input: 214 32% 88%;
+    --ring: 221 83% 53%;
+    --radius: 0.625rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* visible keyboard focus everywhere */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

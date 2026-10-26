@@ -1,0 +1,11 @@
+# Replace the placeholders with GitHub usernames.
+/apps/owner/                       @dev1
+/apps/backend/src/modules/owner/   @dev1
+/apps/superadmin/                  @dev2
+/apps/backend/src/modules/superadmin/ @dev2
+/apps/backend/                     @dev3
+/apps/ai-worker/                   @dev3
+/packages/api-types/               @dev3
+/packages/validation/              @dev3
+/infra/                            @dev3
+/docs/                             @dev3

@@ -1,0 +1,10 @@
+@import "@dbi/ui/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: var(--color-white);
+  color: var(--color-text);
+}

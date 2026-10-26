@@ -1,0 +1,6 @@
+# Pinned to 4.x: opencv-python(-headless) 5.x dropped HOGDescriptor (the people detector
+# this worker's PersonDetector uses) from the default build.
+opencv-python-headless==4.10.0.84
+numpy
+requests
+python-dotenv

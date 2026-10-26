@@ -1,0 +1,17 @@
+{
+  "name": "dbi-intelligence",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:owner": "npm run dev -w @dbi/owner",
+    "dev:superadmin": "npm run dev -w @dbi/superadmin",
+    "dev:backend": "npm run dev -w @dbi/backend",
+    "seed": "npm run seed -w @dbi/backend",
+    "build:owner": "npm run build -w @dbi/owner",
+    "build:superadmin": "npm run build -w @dbi/superadmin",
+    "test:owner": "npm run test -w @dbi/owner",
+    "test": "npm run test:owner",
+    "test:all": "node scripts/verify-all.js",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

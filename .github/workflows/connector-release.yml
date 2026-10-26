@@ -1,0 +1,45 @@
+name: Publish Connector
+
+# Runs only when apps/connector itself changes on main - unrelated backend/owner-app
+# pushes do not trigger a new Connector release.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/connector/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # needed to create/update the GitHub Release electron-updater reads from
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      # electron-updater compares semver, so every release needs a version strictly higher
+      # than the last. Using the ever-increasing run number as the patch version means every
+      # push produces an installable update without anyone having to remember to bump it by
+      # hand. This only changes the version for this build - it is NOT committed back to git.
+      - name: Set build version
+        working-directory: apps/connector
+        shell: bash
+        run: |
+          MAJOR_MINOR=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          npm version "${MAJOR_MINOR}.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+
+      - name: Build and publish to GitHub Releases
+        working-directory: apps/connector
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STAFFPIE_BACKEND_URL: https://api.theaft.digitalbookofindia.com
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run publish
