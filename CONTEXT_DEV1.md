@@ -96,6 +96,101 @@ and the owner panel's zone editor, live monitoring and dashboard.
 7. Pilot accuracy and count-error thresholds per camera and zone.
 8. Subscriptions/entitlements: skipped (no billing in this codebase); confirm with the product owner.
 
+## 7a. Strategy (phases)
+
+Rule for every phase: the repo must be **green at the end** (`npm run typecheck`, `npm test`, backend tests,
+owner `next build`) before the phase is committed and pushed. Never push a phase that does not compile.
+
+| Phase | Name | Effort | Delivers to Dev 2 | Depends on |
+|---|---|---|---|---|
+| P0 | Cleanup of the inherited product | done | n/a | n/a |
+| P1 | Tenancy foundation (backend) | ~9 d | contract 1 | P0 |
+| P2 | Events core, evidence and platform standards (backend) | ~14 d | contracts 2, 4, 6 | P1 |
+| P3 | Company settings and panel migration | ~9 d | contract 7 | P1, P2 |
+| P4 | Event inbox, notifications, accessibility | ~7 d | first end-to-end view | P2, P3 |
+| P5 | Manifests, vehicles, loading sessions, reconciliation | ~7 d | consumes contract 3 | P2, P3 |
+| P6 | Reports, audit trail, superadmin | ~8.5 d | n/a | P2, P3 |
+| P7 | Observability, delivery, docs, hardening | ~9 d | joint integration tests | all |
+
+### P1 Tenancy foundation (backend)
+Goal: every request is company-scoped and role-checked; the repo compiles on the new Company/Site model.
+- Finish what is already written (types, models, permissions, middleware, auth, company, sites).
+- Users and invitations, `PATCH role`, member status, last-owner rule, `GET /me`.
+- Camera registration under a site, `GET /cameras`, `POST /cameras/:id/assign-site`.
+- Move events, notifications, evidence, internal AI routes and superadmin routes to company/site.
+- Mechanical rename in both panels and mocks only so `typecheck` and `next build` stay green (real screens are P3).
+- New seed (six roles, site, camera, zone, DEMO). Wire `app.ts`; delete old shop routes.
+- Integration tests on a **separate test database**: QA-01, QA-02, invitation, last owner, site assignment.
+Exit: typecheck + all tests green; backend boots; register -> create site -> invite -> accept works via HTTP.
+Hand-off: tell Dev 2 contract 1 is ready (`guard`, `requireSiteAccess`, `requireCameraAccess`, permissions).
+
+### P2 Events core, evidence and platform standards (backend)
+Goal: events can be created, reviewed and stored safely; every route follows one convention.
+- Event model (11 types, severity, status, summary, payload, eventKey) with unique `(companyId, eventKey)`.
+- Transition map, history, notes, assign; acknowledge, resolve (5 outcomes), false-positive, reopen.
+- `createCargoEvent()` service (idempotent) and `GET /events` with filters and cursor.
+- Evidence service: private object storage (local adapter + S3/GCS adapter), `saveEvidence()`, `signEvidenceUrl()`,
+  expired link denied. Retention job skeleton.
+- Standards: migrations with rollback, `{data, meta:{requestId}}`, full error codes, body limit, page caps,
+  rate limits (login, imports, exports).
+Exit: QA-08 and QA-09 pass as tests; idempotent `createCargoEvent` test (same key twice = one event).
+Hand-off: contracts 2, 4, 6 (event input shape, event types, severity) published; Dev 2 swaps stubs for real.
+
+### P3 Company settings and panel migration
+Goal: a user can do the whole setup in the browser.
+- CompanySettings model and endpoints (tolerance, retention, default confidence, shifts, timezone).
+- Owner panel: register with company, memberships, Sites screen, Users & Roles screen, Cameras list with site
+  assignment, Settings screen; permission-denied, empty, error and offline states.
+- Superadmin panel moved to companies and sites (read-only lists first).
+- Decide mocks: delete the owner mock layer or rebuild it on the new model.
+Exit: in a real browser (mocks off): register, create a site, invite and accept, assign a camera, change a role.
+Hand-off: contract 7 (shifts) published.
+
+### P4 Event inbox, notifications, accessibility
+Goal: an operator can review an event end to end.
+- Inbox UI (filters, evidence, notes, assignment, resolve, false positive) and event detail.
+- In-app notifications by role and site; retry with backoff and dead-letter handling (jobs).
+- Keyboard-usable review, clear severity and status labels.
+Exit: with a seeded event: acknowledge -> in review -> resolve works in the browser and writes history.
+Milestone M4: first end-to-end with Dev 2 (ingestion creates an event, it appears in the inbox).
+
+### P5 Manifests, vehicles, loading sessions, reconciliation
+Goal: expected vs observed count with a review-required mismatch event.
+- Manifest CRUD, vehicle registry, CSV import (row-level errors, no partial writes, idempotent) (QA-10).
+- Sessions create/list/get/close; reconciliation through `getObservedCount` (stub until Dev 2 delivers).
+- Mismatch event via `createCargoEvent`; UI for manifests and sessions.
+Exit: manifest 100 / observed 94 gives difference -6 and `review_required` (QA-07), tolerance respected.
+
+### P6 Reports, audit trail, superadmin
+Goal: managers and auditors can report, and admins can supervise.
+- Reports (cargo activity, mismatches) with filters, site timezone (QA-11), coverage-gap marking (QA-06).
+- Audited CSV export; `GET /audit-logs` and the audit trail UI.
+- Superadmin: company suspend/activate with reason and audit, audited support access to evidence.
+Exit: export respects the same access rules as the event list; role changes and exports appear in the audit log.
+
+### P7 Observability, delivery, docs, hardening
+Goal: pilot-ready.
+- Structured logs, metrics endpoint, CI, Dockerfiles, health checks, backups with tested restore, rollback plan.
+- OpenAPI, README, QA checklist, security notes, production env documentation.
+- Joint integration tests with Dev 2; security review (tenant isolation, secrets, rate limits).
+Exit: Definition of Done in the requirements PDF section 16, for Dev 1's areas.
+
+### Working loop for every task
+1. Read this file and the code around the task. 2. Implement (small commits). 3. Add or update tests.
+4. `npm run typecheck`, `npm test`, backend tests. 5. Manual check (HTTP or browser). 6. Update this file
+(checklist, state, log). 7. `git pull --rebase`, `git push origin feature/development`.
+
+### Cut order if time runs short
+Cut first: accessibility polish beyond keyboard use, metrics endpoint, audited support-access workflow, CSV import
+(manual manifests still work). Never cut: tenant isolation and role checks, audit of sensitive actions,
+idempotency, loading/empty/error/permission states, DEMO labels, secret handling, evidence privacy.
+
+### Risks
+- Mid-migration the repo does not compile (P1): do P1 in one sitting, commit only when green.
+- Dev 2 blocked on contracts: publish contracts 1, 2, 4, 6 at the end of P1 and P2 and keep stubs in the meantime.
+- Reconciliation needs the ledger: stub `getObservedCount` first.
+- Object storage credentials are not available yet: ship a local adapter behind the same interface.
+
 ## 8. Requirements checklist (Dev 1)
 
 Legend: [x] done and pushed, [~] started, not pushed or not compiling, [ ] not started.
