@@ -38,12 +38,16 @@ All of these are public (shipped to the browser). Never put a secret in a `NEXT_
 | `/dashboard` | Camera health and latest alerts |
 | `/sites/new`, `/sites/:id` | Create and edit a site |
 | `/sites/:id/cameras` | Add/edit a camera, connection test, live status |
-| `/sites/:id/cameras/:cameraId/zone` | Draw the shutter zone (0..1 polygon) |
+| `/sites/:id/cameras/:cameraId/zone` | Draw the zone (old shutter-style editor; the AI pipeline work replaces it with counting lines) |
 | `/sites/:id/alerts`, `/sites/:id/alerts/:eventId` | Alerts list, evidence viewer, review |
 | `/notifications` | What we told you, delivery status |
 | `/sites`, `/sites/new`, `/sites/:id` | Sites list (deactivate, archive), add a site, site profile |
 | `/users` | Users and roles: invite people, change role and site access |
 | `/accept-invitation?token=` | Join a company from an invitation link |
+| `/alerts` | Company-wide alert inbox: filters (status, severity, type, assigned to me, date), review, notes, assignment |
+| `/shipments` | Sessions (start/close, count vs manifest), Manifests (add, CSV import), Vehicles |
+| `/reports` | Cargo activity by day (site time zone), shifts, coverage gaps, count differences, CSV export |
+| `/audit` | Company audit trail (owners, admins, auditors) |
 | `/settings` | Profile, company, operating settings (tolerance, evidence retention, shifts, notification rules) |
 
 ## Rules the UI follows
@@ -62,9 +66,11 @@ integration tests in `apps/backend` (`npm run test:int -w @dbi/backend`), which 
 
 ## Status and known gaps
 
-The panel is being converted from the single-shop product to companies and sites. Screens for sites, users and
-roles, the event inbox, manifests and reports are still to be built (see `CONTEXT_DEV1.md`).
+Done: sites, users and roles, invitations, settings, alerts inbox, notifications, shipments, reports, audit trail. Menu items
+appear only for roles allowed to use them, and every action the API would refuse is hidden or disabled.
+Not yet done: the zone editor still uses the old shutter-style zones (replaced by the AI pipeline work), live view and the
+dashboard counts. The Alerts, Notifications, Shipments, Reports and Audit screens have not yet been checked in a real browser
+(see `CONTEXT_DEV1.md`, section 0).
 
-Accessibility: DOM audit passes (names, labels, one `h1`, skip link, focus ring, reduced motion,
-AA contrast for the design tokens). Not yet done: screen-reader pass and keyboard walkthrough on a
-real device.
+Accessibility: DOM audit passes (names, labels, one `h1`, skip link, focus ring, reduced motion, AA contrast for the design
+tokens). Not yet done: screen-reader pass and keyboard walkthrough on a real device.

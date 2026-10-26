@@ -1,7 +1,46 @@
 # Dev 1 Context and Work Log (Platform, Workflow & Admin)
 
 > Single source of truth for Dev 1. **Update this file at the end of every task.**
-> Last updated: 2026-10-26 (P1, P2 and P3 code complete and verified, not committed)
+> Last updated: 2026-10-26 (P1 to P7 committed and merged with Dev 2's vision work; full test suites not yet re-run after the merge)
+
+## 0. START HERE (resume from this section)
+
+**Where we are.** All seven phases of the Dev 1 list (P0 to P7) are built and pass their automated checks. P0 is pushed.
+P1 to P7 are **uncommitted** in the working tree on `feature/development` (the owner will commit and push; the suggested
+commit message is "Convert to AI Cargo & Shipment Security (P1-P7)"). Check `git status` first thing: about 200 changed
+files, plus 20 old `git rm`/`git mv` entries that are staged by accident (harmless; they are the deleted shop/owner routes).
+
+**Numbers at the last run (2026-10-26).** Typecheck clean in all apps. Owner tests 12, backend unit tests 61, backend
+integration tests 138, `next build` of owner and superadmin OK, built backend (`node dist/server.js`, production mode) runs.
+
+**First 10 minutes tomorrow.**
+1. `git status`, then `git pull origin feature/development --rebase` only after the owner has committed (never before).
+2. `npm install` (root), `npm run migrate -w @dbi/backend` (creates indexes; migration 003 is new).
+3. `npm run typecheck && npm test && npm test -w @dbi/backend && npm run test:int -w @dbi/backend` (integration tests need
+   MongoDB; they use `cargo_ai_test` and drop it).
+4. Start the three dev servers (section 10). Demo logins are in `apps/backend/src/seeds/seed.ts` (`owner@dbi.com`,
+   `admin@dbi.com` = platform admin, plus manager/operator/auditor/other-owner). The `cargo_ai` database already has them.
+
+**What is open, in the order to do it** (details in section 9 and the deferred list at the end):
+1. **Look at the new screens in a real browser**: Alerts, Notifications, Shipments (Sessions/Manifests/Vehicles), Reports,
+   Audit trail. They were never viewed (the Chrome tool could not act on localhost pages). Fix what looks wrong.
+2. Build the Docker images (`infra/docker/*.Dockerfile`, `infra/docker-compose.prod.yml`): written, never built.
+3. Go through the deferred walkthrough items (end of this file).
+4. Superadmin screen for support access to evidence (API `POST /admin/support/evidence-link` exists and is tested).
+5. S3/GCS evidence adapter (needs credentials), a real restore drill (`docs/runbook.md`), shared rate-limit store before running
+   more than one API instance.
+6. Run the full suites after the Dev 2 merge (see section 9, "Merge with Dev 2"), then test the whole chain: enable monitoring, worker posts a line crossing, start and close a loading session, check the count and the mismatch event.
+7. Product questions in section 7 (tolerance default, retention, export of clips, manifest source) need answers.
+
+**Standing rules from the owner** (also in section 2): do not stage/commit/push without asking; one branch only
+(`feature/development`); all data real (DB rows, DEMO-marked seeds, no mocks); tests only on `cargo_ai_test`; do not stop the
+owner's dev servers (ports 3000, 3001, 4000); my throw-away servers use 4100/3100 with `NEXT_DIST_DIR=.next-walk`; tell the
+owner the plan before and the result after every phase; the Atlas password pasted in chat is still the live one (the owner
+chose not to rotate it yet; never write it in any file).
+
+**Where things are.** Plan and contracts: this file. How to run/operate: `README.md`, `docs/runbook.md`,
+`docs/production-env.md`. API: `docs/openapi.yaml` (a test fails if a route is undocumented). Checks per requirement:
+`docs/qa-checklist.md`. Security model and review: `docs/security-and-privacy.md`.
 
 ## 1. Project in one paragraph
 
@@ -60,15 +99,22 @@ Dev 1: `tenancy.ts`, `events.ts`, `cargo.ts`. Dev 2: `zones.ts`, `counts.ts`, `m
 ## 5. My folders (Dev 1)
 
 ```
-apps/backend/src/middleware/          auth, tenant, errors, rate limits
-apps/backend/src/models/              Company, CompanyMember, Invitation, Site, Camera, Event*, Notification, AuditLog, Manifest, Vehicle, LoadingSession, CompanySettings
-apps/backend/src/modules/             auth, company, sites, users, owner/cameras, owner/events, owner/notifications, manifests, loading-sessions, reports, audit-logs, superadmin
-apps/backend/src/services/            authz, tenancy, audit, evidence, notifications, reconciliation
-apps/backend/src/jobs/                retention, notification retry
-apps/backend/src/seeds/
-apps/owner/                           owner web panel (everything except zones and live view and dashboard)
-apps/superadmin/                      superadmin panel
-docs/  CI/deploy files
+apps/backend/src/middleware/     auth (authenticate, resolveTenant, guard), errors, rate limits, request id + request logger
+apps/backend/src/models/         Company, CompanyMember, Invitation, Site, Camera, CompanySettings, CargoEvent, EventHistory, EventNote,
+                                 Notification, AuditLog, Vehicle, Manifest, ImportJob, LoadingSession (Zone is Dev 2's)
+apps/backend/src/modules/        auth, company, sites, users, owner/{cameras,events,notifications}, evidence, shipments (vehicles,
+                                 manifests, loading-sessions), reports, audit, superadmin/{companies,sites,overview,health,audit-logs,support},
+                                 internal/{ai-events,ai-health,cameras,evidence-upload}
+apps/backend/src/services/       authz, tenancy, audit, events (createEvent, transitions, retention), evidence, notifications (dispatcher),
+                                 settings, counts (contract 3), loading (reconcile), manifests (csv), reports (time, csv), observability (metrics)
+apps/backend/src/jobs/           retention, notifications
+apps/backend/src/ops/            backup, restore, snapshot
+apps/backend/src/migrations/     runner + 3 migrations
+apps/backend/src/seeds/  src/test/  scripts/ (build.js = esbuild bundle, run-tests.js)
+apps/owner/                      owner web panel (everything except zones, live view and dashboard)
+apps/superadmin/                 superadmin panel
+packages/api-types, packages/validation   shared types, permission table, zod schemas
+docs/  infra/  .github/workflows/ci.yml
 ```
 
 Dev 2 owns: `modules/zones`, `modules/counts`, `modules/monitoring`, `modules/internal/ai-events`, `apps/ai-worker`,
@@ -115,6 +161,8 @@ owner `next build`) before the phase is committed and pushed. Never push a phase
 | P5 | Manifests, vehicles, loading sessions, reconciliation | ~7 d | consumes contract 3 | P2, P3 |
 | P6 | Reports, audit trail, superadmin | ~8.5 d | n/a | P2, P3 |
 | P7 | Observability, delivery, docs, hardening | ~9 d | joint integration tests | all |
+
+**Status: P0 pushed. P1 to P7 code complete, verified by tests and builds, uncommitted. Screens of P4 to P6 not yet seen in a browser.**
 
 ### P1 Tenancy foundation (backend)
 Goal: every request is company-scoped and role-checked; the repo compiles on the new Company/Site model.
@@ -290,52 +338,95 @@ Effort figures are rough estimates in person-days.
 
 ## 9. Current state (2026-10-26)
 
-- `feature/development` on GitHub holds 9 cleanup commits (connector, browser push, schedule/security-state, theft
-  detector, old docs, notification preferences removed; README rewritten). `main` is still the original code.
-  `cargo/cleanup` is a duplicate of `feature/development` and can be deleted.
-- Local commits not pushed: `CONTEXT_DEV1.md` (2 commits).
-- **P1, P2 and P3 are code-complete but uncommitted** (nothing staged by choice of the repo owner; some `git rm`/`git mv`
-  side effects from early work may be staged, check `git status`). Verified for P3: typecheck (all apps), owner tests 10,
-  backend unit tests 35, backend integration tests 74, owner and superadmin `next build`, and a browser run of the new
-  screens (sites, users and roles, invitation acceptance, settings, role-limited controls).
-- The `cargo_ai` database was migrated and re-seeded after P2 (`npm run migrate`, `npm run seed`). P3 added the
-  `company_settings` collection, which is created on first save; run `npm run migrate` after pulling to be safe.
-- Evidence files are stored in `apps/backend/uploads` (created automatically, gitignored).
-- **P4 and P5 are code-complete but uncommitted.** Verified: typecheck (all apps), backend unit tests 52, backend
-  integration tests 110, owner tests 11, owner and superadmin `next build`, and an API run of the shipment flow against a
-  real server and database (`cargo_ai_test`, dropped afterwards). **The P4/P5 screens were NOT checked in a browser**
-  (the browser tool could not act on the page); do that before demo.
-- Migration 003 creates the P5 indexes (001 is already recorded on existing databases, so it would skip them).
-- P5 added collections `cargo_vehicles`, `cargo_manifests`, `cargo_import_jobs`, `cargo_loading_sessions`. Run
-  `npm run migrate` after pulling so their indexes exist (the one-open-session-per-manifest rule is an index).
-- Contract 3 (`services/counts/observed.ts`): until the counting service exists, the default reads the spec's
-  `cargo_count_ledger` collection (companyId, zoneId or siteId, occurredAt, direction IN/OUT, countDelta). If that
-  collection is missing, sessions close as `closed_unverified` and no number is invented. Dev 2: point
-  `setObservedCountProvider` at the real service if the ledger differs.
-- **P6 and P7 are code-complete but uncommitted.** Verified: typecheck (all apps), owner tests 12, backend unit tests 61,
-  backend integration tests 138, owner and superadmin `next build`, and the built backend (`node dist/server.js`, production
-  mode) run against a real database: JSON logs, `/health/ready`, metrics. The Reports, Audit trail and Shipments screens were
-  NOT checked in a browser (the browser tool could not act on the page).
-- P7 security review fixes (see `docs/security-and-privacy.md`): rate limits no longer trust a spoofed `X-Forwarded-For`
-  (set `TRUST_PROXY` behind a proxy); the dev-only mock admin login was removed; localhost CORS only outside production;
-  DNS servers opt-in; `npm start` was broken (shared packages are TypeScript) and the backend is now bundled with esbuild.
-- Run `npm run migrate` after pulling (migration 003 creates the P5 indexes). Production needs `TRUST_PROXY` set.
-- **Dev work is complete for the Dev 1 list.** Remaining: browser check of the new screens, building the Docker images, a real
-  restore drill, object-storage adapter, a superadmin screen for support access, the deferred walkthrough items below, and
-  joint integration testing with the AI pipeline once its counting service exists.
-- The AI worker is heartbeat-only and reports DEGRADED (Dev 2 replaces it).
+**Git.** `feature/development` on GitHub holds the P0 cleanup commits. `main` is still the original code. `cargo/cleanup`
+is a duplicate and can be deleted. Local, unpushed: two `CONTEXT_DEV1.md` commits. P1 to P7 are in the working tree,
+uncommitted; some `git rm`/`git mv` entries from early work are staged.
+
+**Verified (2026-10-26).** Typecheck (all apps); owner tests 12; backend unit 61; backend integration 138 (tenancy, events and
+evidence, settings, inbox and notifications, shipments, reports and audit, operations, security, OpenAPI sync); owner and
+superadmin `next build`; built backend run in production mode against a real database (JSON logs, `/health/ready`, metrics).
+Browser-verified earlier: P1 and P3 screens. **Not viewed in a browser: Alerts inbox, Notifications, Shipments, Reports,
+Audit trail** (the Chrome tool opened localhost pages but refused every action on them).
+
+**Databases.** `cargo_ai` was migrated (all 3 migrations) and seeded with DEMO data; run `npm run migrate` after every pull.
+The test databases `cargo_ai_test` and `cargo_ai_restore_test` are created and dropped by the tests.
+
+**What exists, by phase.**
+- P1 tenancy: companies, sites, members, invitations, roles (owner, admin, manager, operator, auditor), site access, 404 across tenants.
+- P2 events: ingestion contract (`createCargoEvent`), review workflow with history, private evidence with signed expiring links,
+  retention job, migrations, response/error conventions, rate limiters.
+- P3 settings and panels: company settings (tolerance, retention, default confidence, shifts, notification rules), sites, users and
+  invitations, settings screens, honest camera status (`effectiveStatus`).
+- P4 inbox and notifications: dispatcher with retry/backoff/dead-letter (`npm run job:notifications`), unread count and read state,
+  assigned-to-me filter, summary and assignee endpoints, Alerts inbox, Notifications screen with badge.
+- P5 shipments: vehicles, manifests, CSV import (all-or-nothing, idempotent by hash), loading sessions, reconciliation, Shipments screen.
+- P6 reports and audit: cargo-activity and mismatch reports in site time zones with shifts and coverage gaps, audited CSV export,
+  company audit trail, company suspend/activate, audited support access to evidence (API only), Reports and Audit trail screens.
+- P7 delivery: JSON logs, metrics (`GET /internal/v1/metrics`, service token), liveness and readiness, graceful shutdown, esbuild
+  bundle (`npm run build -w @dbi/backend`; the old `tsc` output could not run), `npm run backup` / `restore`, CI workflow,
+  Dockerfiles and prod compose (never built), OpenAPI, runbook, production env guide, QA checklist, security review with fixes.
+
+**Contract 3 (observed counts, `services/counts/observed.ts`).** The default now reads Dev 2's count ledger through
+`modules/vision/counts/service.ts` (`getObservedCount`, collection `vision_count_ledger`). A site with no enabled camera monitor
+answers "not available" (null), so the session closes as `closed_unverified` and no number is invented. Tests replace the source with
+`setObservedCountProvider`. Decided rule: a session's observed count is the crossings in its own direction (outbound = OUT,
+inbound = IN); the other direction is stored in `countsBreakdown` and never subtracted (`observedForSession`).
+
+**Merge with Dev 2 (2026-10-26, rebase of P1-P7 onto their two vision commits).** Decisions, so nobody has to rediscover them:
+- Dev 2's modules live in `apps/backend/src/modules/vision/*` and models `Vision*` (collections `vision_zones`, `vision_events`,
+  `vision_count_ledger`, `vision_camera_monitors`). They were written for the old shop model; they now use our tenancy: their
+  `assertShopAccess` stub became `assertSiteAccess` (`vision/shared/access.ts`: site must belong to the member's company and, for
+  site-limited roles, be assigned; everything else is 404), their routers run `authenticate` + `resolveTenant`, and the field
+  `shopId` was renamed `siteId` (ref `Site`) everywhere. Old `vision_*` documents that still carry `shopId` belong to shops that no
+  longer exist; delete them. Migration 004 creates the vision indexes.
+- Two ingestion paths, deliberately: `/internal/v1/ai/events` is the worker's gateway (Dev 2: Appendix A, payload hash, 409 on key reuse
+  with a different payload, count ledger). After an accepted alert-type event (restricted zone, after hours, count mismatch, damage,
+  seal change, camera offline, AI unavailable) `vision/ingestion/inbox.ts` forwards it to `createCargoEvent` so it shows in the
+  Alerts inbox; counting-only types stay in the ledger. `/internal/v1/ai/cargo-events` (and `/api/v1/ai/events`) write straight to the
+  inbox. The event type lists of both are identical.
+- Secrets: Dev 2's `serviceAuth` is used (fail closed under 32 characters, `AI_SERVICE_TOKEN_PREVIOUS` for rotation). Our env keeps
+  development fallbacks (the AI token fallback is now 32+ characters) and requires the secrets only in production; Dev 2's stricter
+  "required even in development" was not adopted because CI and the integration tests run without a `.env`. Decide together if you want it.
+- Owner panel: Dev 2's dashboard, zone editor page and live HUD replace the shutter-era ones, moved from `shops/` to `sites/` routes
+  (`/sites/:id/cameras/:cameraId/zone` and `.../live`); `DemoBanner` stays deleted. Our JSON limit (`BODY_LIMIT`, 1 MB) replaces their 100 KB
+  because CSV import needs it. `GET /cameras/:id/preview` returns an SVG TEST CARD, not a real frame: the zone editor and live page must
+  not present it as video (open item).
+- OpenAPI: `docs/openapi.yaml` (platform) and `docs/vision/openapi.yaml` (Dev 2) are both checked against the routes by `openapi.int.test.ts`.
+- Not re-run after the merge (by the owner's choice): the full integration suites and `next build`. Only typecheck (all apps) and the
+  OpenAPI sync test were run. Run the full set first thing (section 0) and fix what the merge broke.
+
+**Security review fixes (P7).** Rate limits no longer trust a spoofed `X-Forwarded-For` (set `TRUST_PROXY` behind a proxy); the
+dev-only mock admin login was removed; localhost CORS only outside production; DNS servers opt-in (`DNS_SERVERS`); `npm start` fixed.
+Open items are listed in `docs/security-and-privacy.md`.
+
+**Not done / needs someone else.** AI detector, tracker, count ledger, zones with counting lines, live view, dashboard and pilot
+(Dev 2). Docker images (never built). Real restore drill. S3/GCS evidence adapter (credentials). Shared rate-limit store.
+Browser check of P4 to P6 screens. Superadmin screen for support access. Product answers (section 7).
+The AI worker is heartbeat-only and reports DEGRADED.
 
 ## 10. Commands
 
 ```
-npm install                 # from repo root, once
-npm run dev:backend         # http://localhost:4000
-npm run dev:owner           # http://localhost:3000
-npm run dev:superadmin      # http://localhost:3001
-npm run typecheck           # all workspaces
-npm test                    # owner unit tests
-npm test -w @dbi/backend    # backend unit tests (permissions)
+npm install                          # from repo root, once
+npm run dev:backend                  # http://localhost:4000
+npm run dev:owner                    # http://localhost:3000
+npm run dev:superadmin               # http://localhost:3001
+npm run typecheck                    # all workspaces
+npm test                             # owner unit tests
+npm test -w @dbi/backend             # backend unit tests
+npm run test:int -w @dbi/backend     # backend integration tests (MongoDB; uses cargo_ai_test, dropped afterwards)
+npm run migrate -w @dbi/backend      # create indexes / apply migrations (also migrate:status, migrate:down)
+npm run seed -w @dbi/backend         # DEMO data (never in production)
+npm run build -w @dbi/backend        # production bundle in apps/backend/dist (esbuild)
+npm run job:notifications -w @dbi/backend   # deliver/retry notifications (every minute in production)
+npm run job:retention -w @dbi/backend       # delete expired evidence (daily)
+npm run backup -w @dbi/backend       # database backup folder (see docs/runbook.md)
+npm run restore -w @dbi/backend -- <folder> --target-uri <uri> [--replace]
 ```
+
+Throw-away environment for browser checks: backend on 4100 and owner on 3100 against `cargo_ai_test`
+(`NEXT_PUBLIC_API_BASE_URL=http://localhost:4100/api/v1 NEXT_DIST_DIR=.next-walk npx next dev -p 3100`); drop the database and
+delete `apps/owner/.next-walk` afterwards.
 
 Env files (gitignored): `apps/backend/.env`, `apps/owner/.env.local`, `apps/superadmin/.env.local`,
 `apps/ai-worker/.env`. Backend needs `MONGODB_URI`, `JWT_ACCESS_SECRET`, `CAMERA_SECRET_ENCRYPTION_KEY`,
@@ -349,8 +440,23 @@ Env files (gitignored): `apps/backend/.env`, `apps/owner/.env.local`, `apps/supe
 - `next@14.2.15` has a known vulnerability; upgrade to a patched 14.2.x before deployment.
 - The backend rate limiter is in memory; it does not work across multiple instances (needs Redis).
 - Standalone MongoDB has no multi-document transactions; multi-step writes use compensating deletes.
+- Large shell heredocs and `sed`/regex edits corrupted files on this machine more than once: create files with the editor
+  tools or a small Node script, and use CRLF-aware edits.
+- After any `next build`/`next dev` with a custom `NEXT_DIST_DIR`, Next adds that folder to `tsconfig.json`; revert it.
+- Tests that need the production-like environment: set `NODE_ENV=production` plus the three secrets and run `node dist/server.js`.
 
 ## Deferred items: fix after ALL phases are complete
+
+### Open after P7 (added 2026-10-26)
+
+1. Look at the Alerts, Notifications, Shipments, Reports and Audit trail screens in a real browser at 360 px and desktop width
+   (empty, loading, error and permission-denied states, keyboard use). Nothing was viewed yet.
+2. Build and run the Docker images and the prod compose file; fix whatever breaks.
+3. Superadmin screen for audited support access to evidence.
+4. Restore drill on a real environment; S3/GCS evidence adapter; shared rate-limit store (Redis) for several API instances.
+5. Upgrade `next` to a patched 14.2.x before deployment.
+6. Automated browser tests and an accessibility audit (none exist).
+7. Owner README "Screens" table and the old zone editor still show shutter-era wording until Dev 2 replaces the zone editor.
 
 The owner asked to collect these and work on them together once every phase is done. Do not fix them piecemeal unless a
 phase needs it. Add new deferred items here.
