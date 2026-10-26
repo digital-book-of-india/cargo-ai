@@ -5,3 +5,4 @@ dist
 !.env.*.example
 storage/evidence/*
 !storage/evidence/.gitkeep
+!.env.example
