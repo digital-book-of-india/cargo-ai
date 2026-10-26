@@ -44,7 +44,7 @@ All of these are public (shipped to the browser). Never put a secret in a `NEXT_
 | `/shops/:id/cameras/:cameraId/zone` | Draw the shutter zone (0..1 polygon) |
 | `/shops/:id/alerts`, `/shops/:id/alerts/:eventId` | Alerts list, evidence viewer, review |
 | `/notifications` | What we told you, delivery status |
-| `/settings` | Profile, notification preferences |
+| `/settings` | Profile |
 
 ## Rules the UI follows
 

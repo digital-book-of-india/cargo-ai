@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { LogOut, Store } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
-import { PreferencesCard } from "@/components/settings/PreferencesCard";
 import { PrivacyCard } from "@/components/settings/PrivacyCard";
 import { ProfileCard } from "@/components/settings/ProfileCard";
 import { Button, Card } from "@/components/ui";
@@ -23,10 +22,9 @@ export default function SettingsPage() {
 
   return (
     <div className="animate-fade-up">
-      <PageHeader title="Settings" description="Your profile and how we notify you." />
+      <PageHeader title="Settings" description="Your profile and account." />
       <div className="mx-auto max-w-2xl space-y-5">
         <ProfileCard />
-        <PreferencesCard />
         <PrivacyCard />
 
         <Card className="p-5">

@@ -40,8 +40,6 @@ export interface MockDb {
   shops: Shop[];
   /** dev knob: what the mock AI worker reports (default ONLINE) */
   aiWorkerState?: string;
-  /** notification preferences by user id */
-  preferences?: Record<string, unknown>;
   cameras: MockCamera[];
   zones: Record<string, Zone>;
   events: SecurityEvent[];

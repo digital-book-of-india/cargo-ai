@@ -104,7 +104,7 @@ export default function NotificationsPage() {
         actions={
           <>
             <Button asChild variant="ghost" size="sm">
-              <Link href="/settings">Preferences</Link>
+              <Link href="/settings">Settings</Link>
             </Button>
             <Button variant="outline" size="sm" loading={loading} onClick={reload}>
               <RefreshCw aria-hidden /> Refresh

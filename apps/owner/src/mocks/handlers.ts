@@ -501,31 +501,6 @@ const routes: Route[] = [
       return { items: [...derived, ...db.notifications] };
     },
   },
-  {
-    method: "GET",
-    pattern: /^\/notifications\/preferences$/,
-    handle: () => {
-      const user = requireUser();
-      return { preferences: getDb().preferences?.[user.id] ?? null };
-    },
-  },
-  {
-    method: "PUT",
-    pattern: /^\/notifications\/preferences$/,
-    handle: (_m, o) => {
-      const user = requireUser();
-      const b = asRecord(o.body);
-      const types = asRecord(b.types);
-      const okTypes = Object.values(types).every((v) => typeof v === "boolean");
-      if (typeof b.push !== "boolean" || typeof b.inApp !== "boolean" || !okTypes) {
-        fail(400, "VALIDATION_ERROR", "Preferences must be true or false values.");
-      }
-      const db = getDb();
-      db.preferences = { ...(db.preferences ?? {}), [user.id]: { push: b.push, inApp: b.inApp, types } };
-      saveDb();
-      return { preferences: db.preferences[user.id] };
-    },
-  },
 ];
 
 export async function mockRequest<T>(path: string, options: MockOptions): Promise<T> {

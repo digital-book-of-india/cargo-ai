@@ -1,4 +1,3 @@
-import type { NotificationPreferences } from "@/lib/notifications";
 import type { AppNotification } from "@/types";
 import { apiRequest } from "./client";
 
@@ -8,8 +7,4 @@ export const notificationsApi = {
     const res = await apiRequest<{ items?: AppNotification[]; notifications?: AppNotification[] }>("/notifications");
     return { notifications: res.items ?? res.notifications ?? [] };
   },
-  // Not in the handoff catalogue yet.
-  getPreferences: () => apiRequest<unknown>("/notifications/preferences"),
-  updatePreferences: (prefs: NotificationPreferences) =>
-    apiRequest<unknown>("/notifications/preferences", { method: "PUT", body: prefs }),
 };

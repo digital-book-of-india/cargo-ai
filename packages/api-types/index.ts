@@ -201,20 +201,6 @@ export interface UpdateProfileRequest {
   name?: string;
 }
 
-export interface NotificationTypePrefs {
-  PERSON_IN_ZONE: boolean;
-  POSSIBLE_SHUTTER_INTERACTION: boolean;
-  POSSIBLE_TAMPERING: boolean;
-  CAMERA_OFFLINE: boolean;
-  AI_OFFLINE: boolean;
-}
-
-export interface NotificationPreferences {
-  push: boolean;
-  inApp: boolean;
-  types: NotificationTypePrefs;
-}
-
 export interface AiEventSubmissionRequest {
   eventId: string;
   shopId: string;

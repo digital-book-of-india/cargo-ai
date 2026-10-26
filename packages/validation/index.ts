@@ -68,18 +68,6 @@ export const updateProfileSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty").optional(),
 });
 
-export const notificationPreferencesSchema = z.object({
-  push: z.boolean(),
-  inApp: z.boolean(),
-  types: z.object({
-    PERSON_IN_ZONE: z.boolean(),
-    POSSIBLE_SHUTTER_INTERACTION: z.boolean(),
-    POSSIBLE_TAMPERING: z.boolean(),
-    CAMERA_OFFLINE: z.boolean(),
-    AI_OFFLINE: z.boolean(),
-  }),
-});
-
 export const aiEventSchema = z.object({
   eventId: z.string().trim().min(1, "eventId is required"),
   shopId: z.string().trim().min(1, "shopId is required"),

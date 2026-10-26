@@ -6,5 +6,4 @@ export * from "./Zone";
 export * from "./SecurityEvent";
 export * from "./Notification";
 export * from "./AuditLog";
-export * from "./AiWorkerHealth";
-export * from "./NotificationPreference";
+export * from "./AiWorkerHealth";
