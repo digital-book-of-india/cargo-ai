@@ -35,7 +35,7 @@ The AI worker is heartbeat-only and reports DEGRADED.
     npm install                      # once, from the repo root
 
     # env files (copy the examples and fill in real values, never commit them)
-    cp apps/backend/.env.example apps/backend/.env       # if present; see apps/backend/.env.production.example
+    cp apps/backend/.env.example apps/backend/.env
     cp apps/owner/.env.example apps/owner/.env.local
     cp apps/superadmin/.env.example apps/superadmin/.env.local
     cp apps/ai-worker/.env.example apps/ai-worker/.env
