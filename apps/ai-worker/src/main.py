@@ -1,12 +1,8 @@
-"""
-DBI Intelligence � Production AI Cargo Worker (Dev 2).
-Spec Aligned:
-- Package, box, and pallet detector (ONNX / OpenCV contour + motion fallback)
-- Session-scoped tracker (SESSION_ID-trackId)
-- Line crossing with directional debounce (QA-04, QA-05)
-- Zone entry, exit, restricted_zone_movement, unusual_after_hours_movement
-- Auto-reconnect, JPEG snapshot upload, idempotent event ingestion
-- Worker observability metrics (stream_health, frame_rate, inference_failures)
+﻿"""
+DBI Intelligence — Production AI Cargo Worker (Dev 2).
+Spec Aligned: Package detection, session-scoped tracking, line crossing
+with directional debounce (QA-04, QA-05), polygon zone events, snapshot upload,
+and idempotent event ingestion.
 """
 
 import os
@@ -78,8 +74,6 @@ def get_json(endpoint: str) -> Tuple[int, dict]:
     except Exception as e:
         return 0, {"error": str(e)}
 
-# --- Geometry, Debounce & After-Hours Helpers (QA-04, QA-05) ---
-
 def ccw(A: Tuple[float, float], B: Tuple[float, float], C: Tuple[float, float]) -> float:
     return (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0])
 
@@ -104,10 +98,7 @@ def is_within_after_hours(after_hours: Optional[dict]) -> bool:
         return start_hm <= now_hm <= end_hm
     return now_hm >= start_hm or now_hm <= end_hm
 
-# --- Package / Box / Pallet Detector ---
-
 class CargoDetector:
-    """Detects package, box, and pallet objects in frames using contour/motion segmentation."""
     def __init__(self):
         self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=300, varThreshold=40, detectShadows=False)
         self.next_id = 1
@@ -131,7 +122,6 @@ class CargoDetector:
             obj_class = "pallet" if area > (w * h * 0.08) else ("box" if 0.7 <= aspect <= 1.4 else "package")
             conf = min(0.98, 0.65 + (area / (w * h)) * 0.5)
 
-            # Match to closest existing centroid for session-scoped continuity
             matched_id = None
             best_dist = 0.08
             for tid, (px, py) in self.active_centroids.items():
@@ -183,7 +173,6 @@ class CargoTracker:
         line_A = (line[0][0], line[0][1])
         line_B = (line[1][0], line[1][1])
 
-        # Hysteresis debounce check (QA-05): ensure endpoint cleared the line margin
         if point_line_distance(p_curr, line_A, line_B) < self.debounce_margin:
             return None
 
@@ -207,7 +196,6 @@ class CargoTracker:
         curr_pt = pts[-1]
         is_inside = point_in_polygon(curr_pt, polygon)
         zones_inside = self.zone_presence.setdefault(track_id, set())
-
         was_inside = zone_id in zones_inside
 
         if is_inside and not was_inside:
@@ -218,8 +206,6 @@ class CargoTracker:
             return "zone_exit"
 
         return None
-
-# --- Camera Pipeline Thread ---
 
 class CameraStreamPipeline(threading.Thread):
     def __init__(self, camera_id: str, site_id: str, zones: list, tracker: CargoTracker):
@@ -378,8 +364,6 @@ class CameraStreamPipeline(threading.Thread):
 
         reader.close()
         self.status = "OFFLINE"
-
-# --- Main Worker Orchestrator ---
 
 class CargoWorker:
     def __init__(self):

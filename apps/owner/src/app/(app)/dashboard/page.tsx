@@ -1,4 +1,4 @@
-"use client";
+ï»¿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -36,7 +36,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
         : new Date(Date.now() - 30 * 86400000).toISOString();
   const toIso = new Date().toISOString();
 
-  // Zone Summary
   const countsQuery = useAsync(async () => {
     try {
       const res = await visionApi.getSummary(shopId, "zone", fromIso, toIso);
@@ -46,7 +45,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
     }
   }, [shopId, range]);
 
-  // Daily Trend Summary (FR-09 / Section 13 Count Trend)
   const trendQuery = useAsync(async () => {
     try {
       const res = await visionApi.getSummary(shopId, "day", fromIso, toIso);
@@ -56,7 +54,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
     }
   }, [shopId, range]);
 
-  // Shift Breakdown Summary
   const shiftQuery = useAsync(async () => {
     try {
       const res = await visionApi.getSummary(shopId, "shift", fromIso, toIso);
@@ -66,7 +63,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
     }
   }, [shopId, range]);
 
-  // Camera & AI Health Status (including QA-12 limitations)
   const monitoringQuery = useAsync(async () => {
     try {
       const res = await visionApi.getStatus(shopId);
@@ -76,7 +72,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
     }
   }, [shopId]);
 
-  // Unresolved Alerts from Dev 1 Events API
   const alertsQuery = useAsync(async () => {
     try {
       const res = await eventsApi.list(shopId, { limit: 6 });
@@ -104,7 +99,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
-          title={`${shop.name} — Cargo Intelligence`}
+          title={`${shop.name} â€” Cargo Intelligence`}
           description="Operational package tracking, line-crossing counts, count trends, and camera security health."
         />
         <div className="w-44">
@@ -121,7 +116,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
         </div>
       </div>
 
-      {/* Primary KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -174,7 +168,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
         </Card>
       </div>
 
-      {/* Count Trend & Shift Breakdown */}
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <Card>
           <CardHeader>
@@ -201,8 +194,8 @@ function DashboardContent({ shop }: { shop: Shop }) {
                       <div className="flex items-center justify-between font-medium">
                         <span>{row.key}</span>
                         <span className="font-mono">
-                          <span className="text-emerald-500">IN: {row.in}</span> •{" "}
-                          <span className="text-blue-500">OUT: {row.out}</span> •{" "}
+                          <span className="text-emerald-500">IN: {row.in}</span> â€¢{" "}
+                          <span className="text-blue-500">OUT: {row.out}</span> â€¢{" "}
                           <strong>Total: {row.total}</strong>
                         </span>
                       </div>
@@ -237,7 +230,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
                     <div>
                       <div className="font-medium">{s.key}</div>
                       <div className="text-xs text-muted-foreground">
-                        IN: {s.in} • OUT: {s.out}
+                        IN: {s.in} â€¢ OUT: {s.out}
                       </div>
                     </div>
                     <div className="text-lg font-bold font-mono">{s.total}</div>
@@ -250,7 +243,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Camera Monitoring Status Grid with QA-12 Limitations */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -282,8 +274,8 @@ function DashboardContent({ shop }: { shop: Shop }) {
                           </Link>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {m.activeZoneCount} active zone(s) •{" "}
-                          {m.frameRate ? `${m.frameRate.toFixed(1)} fps` : "No frame rate"} • Worker:{" "}
+                          {m.activeZoneCount} active zone(s) â€¢{" "}
+                          {m.frameRate ? `${m.frameRate.toFixed(1)} fps` : "No frame rate"} â€¢ Worker:{" "}
                           {m.workerStatus}
                         </div>
                       </div>
@@ -327,7 +319,6 @@ function DashboardContent({ shop }: { shop: Shop }) {
           </CardContent>
         </Card>
 
-        {/* Recent Events & Alerts */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -356,7 +347,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
                       </div>
                       <div className="text-xs text-muted-foreground flex items-center gap-2">
                         <Clock className="h-3 w-3" />
-                        {new Date(evt.startedAt).toLocaleTimeString()} • Status: {evt.reviewStatus}
+                        {new Date(evt.startedAt).toLocaleTimeString()} â€¢ Status: {evt.reviewStatus}
                       </div>
                     </div>
                     <Link
