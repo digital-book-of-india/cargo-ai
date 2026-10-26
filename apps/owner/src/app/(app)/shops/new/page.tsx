@@ -17,8 +17,8 @@ export default function NewShopPage() {
     const { shop } = await shopsApi.create(values);
     upsert(shop);
     select(shop.id);
-    toast.success(`${shop.name} created`, { description: "Next: set your opening hours." });
-    router.push("/onboarding");
+    toast.success(`${shop.name} created`, { description: "Next: connect your camera." });
+    router.push(`/shops/${shop.id}/cameras`);
   }
 
   return (

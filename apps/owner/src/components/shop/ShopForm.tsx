@@ -99,7 +99,7 @@ export function ShopForm({ initial, submitLabel, onSubmit, onCancel, requireChan
 
       <SelectField
         label="Timezone"
-        hint="Your opening hours and alerts follow this timezone."
+        hint="Times in alerts follow this timezone."
         value={timezone}
         onValueChange={setTimezone}
         options={timezones}

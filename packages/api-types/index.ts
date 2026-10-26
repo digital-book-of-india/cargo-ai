@@ -32,35 +32,6 @@ export interface Shop {
   updatedAt?: string;
 }
 
-export type Day = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
-
-export interface DaySchedule {
-  day: Day;
-  openTime?: string; // local HH:mm
-  closeTime?: string; // local HH:mm
-  closed: boolean;
-  closesNextDay: boolean;
-}
-
-export interface ScheduleException {
-  date: string; // YYYY-MM-DD
-  closed: boolean;
-  openTime?: string;
-  closeTime?: string;
-  closesNextDay?: boolean;
-  note?: string;
-}
-
-export interface Schedule {
-  shopId: string;
-  weeklySchedule: DaySchedule[];
-  gracePeriodMinutes: number;
-  exceptions?: ScheduleException[];
-  version: number;
-  nextTransitionAt?: string; // UTC ISO-8601
-  updatedAt?: string;
-}
-
 export type CameraStatus = "PENDING_TEST" | "ONLINE" | "OFFLINE" | "ERROR";
 
 // Safe fields only. Never the stream URL or credentials.
@@ -93,26 +64,6 @@ export interface Zone {
   sensitivity: ZoneSensitivity;
   enabled: boolean;
   updatedAt?: string;
-}
-
-export type DesiredSecurityState = "ARMED" | "DISARMED";
-export type MonitoringState =
-  | "MONITORING"
-  | "DISARMED"
-  | "DEGRADED"
-  | "OFFLINE"
-  | "SETUP_REQUIRED";
-
-export interface SecurityState {
-  shopId: string;
-  desiredState: DesiredSecurityState;
-  actualMonitoringState: MonitoringState;
-  cameraState: string;
-  aiWorkerState: string;
-  reason: string;
-  scheduleVersion?: number;
-  evaluatedAt: string;
-  changedAt?: string;
 }
 
 export type EventType =
@@ -209,12 +160,6 @@ export interface UpdateShopRequest {
   address?: ShopAddress;
 }
 
-export interface UpdateScheduleRequest {
-  weeklySchedule: DaySchedule[];
-  gracePeriodMinutes?: number;
-  exceptions?: ScheduleException[];
-}
-
 export interface RegisterCameraRequest {
   name: string;
   protocol: "RTSP" | "ONVIF";
@@ -240,12 +185,6 @@ export interface SaveZoneRequest {
   polygon: Point[];
   sensitivity: ZoneSensitivity;
   enabled: boolean;
-}
-
-export interface ManualOverrideRequest {
-  action: "ARM" | "DISARM";
-  durationMinutes?: number;
-  reason: string;
 }
 
 export interface ReviewEventRequest {

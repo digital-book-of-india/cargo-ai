@@ -1,27 +1,11 @@
 import { Badge } from "@/components/ui/Badge";
 import type { BadgeTone } from "@/components/ui/Badge";
-import { MONITORING_COPY } from "@/lib/security";
 import type {
   CameraStatus,
   EventType,
-  MonitoringState,
   ReviewStatus,
   ShopStatus,
 } from "@/types";
-
-// Labels are deliberately honest: only MONITORING reads as protected.
-
-export const monitoringMeta: Record<MonitoringState, { label: string; tone: BadgeTone; hint: string }> =
-  MONITORING_COPY;
-
-export function SecurityStateBadge({ state }: { state: MonitoringState }) {
-  const m = monitoringMeta[state];
-  return (
-    <Badge tone={m.tone} dot>
-      {m.label}
-    </Badge>
-  );
-}
 
 const camera: Record<CameraStatus, { label: string; tone: BadgeTone }> = {
   PENDING_TEST: { label: "Not tested yet", tone: "neutral" },

@@ -11,7 +11,6 @@
     "build:superadmin": "npm run build -w @dbi/superadmin",
     "test:owner": "npm run test -w @dbi/owner",
     "test": "npm run test:owner",
-    "test:all": "node scripts/verify-all.js",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

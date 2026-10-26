@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { requireAdmin, adminRateLimiter, sendSuccess, sendError, AuthenticatedAdminRequest } from "../../../middleware/adminAuth";
-import { ShopModel, CameraModel, SecurityStateModel, EventModel, AuditLogModel, AiWorkerHealthModel } from "../../../models";
+import { ShopModel, CameraModel, EventModel, AuditLogModel, AiWorkerHealthModel } from "../../../models";
 import { computeEffectiveCameraStatus, getAiWorkerHealthSnapshot } from "../../../utils/adminHelpers";
 
 export const adminOverviewRouter = Router();
@@ -38,20 +38,6 @@ adminOverviewRouter.get("/", async (req: Request, res: Response) => {
     }
 
     const cameraOnlineRate = totalCameras > 0 ? Math.round((onlineCameras / totalCameras) * 100) : null;
-
-    // 3. Active Monitoring Shops
-    const monitoringCutoff = new Date(Date.now() - staleThreshold * 1000);
-    let activeMonitoringShops = 0;
-    try {
-      const activeShopIds = await ShopModel.find({ status: "ACTIVE" }).distinct("_id");
-      activeMonitoringShops = await SecurityStateModel.countDocuments({
-        shopId: { $in: activeShopIds },
-        actualMonitoringState: "MONITORING",
-        evaluatedAt: { $gte: monitoringCutoff },
-      });
-    } catch {
-      activeMonitoringShops = 0;
-    }
 
     // 4. Unreviewed Alerts
     const unreviewedAlerts = await EventModel.countDocuments({ reviewStatus: "NEW" }).catch(() => 0);
@@ -113,7 +99,6 @@ adminOverviewRouter.get("/", async (req: Request, res: Response) => {
           totalCameras,
           onlineCameras,
           cameraOnlineRate,
-          activeMonitoringShops,
           unreviewedAlerts,
         },
         aiWorker,

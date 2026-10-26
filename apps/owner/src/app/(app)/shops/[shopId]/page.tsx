@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, CalendarClock, Camera, ShieldAlert } from "lucide-react";
+import { ArrowRight, Camera, ShieldAlert } from "lucide-react";
 import { DemoBadge } from "@/components/common/DemoBadge";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Alert, ApiErrorState, LoadingState } from "@/components/common/States";
@@ -43,7 +43,6 @@ export default function ShopProfilePage() {
   if (!shop) return null;
 
   const links = [
-    { href: `/shops/${shop.id}/schedule`, label: "Opening hours", text: "When you open and close", icon: CalendarClock },
     { href: `/shops/${shop.id}/cameras`, label: "Cameras", text: "Connect and test your CCTV", icon: Camera },
     { href: `/shops/${shop.id}/alerts`, label: "Alerts", text: "Review suspected activity", icon: ShieldAlert },
   ];

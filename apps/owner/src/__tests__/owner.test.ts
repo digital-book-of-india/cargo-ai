@@ -5,9 +5,7 @@ import { safeNextPath } from "../lib/auth";
 import { friendlyMessage } from "../lib/api/messages";
 import { ApiError } from "../lib/api/errors";
 import { clamp01, round4, polygonArea, isSelfIntersecting, validateZonePoints } from "../lib/zone";
-import { deriveSecurityView, STALE_AFTER_MS } from "../lib/security";
 import { checkHost, checkPort, timeAgo } from "../lib/camera";
-import type { SecurityState } from "../types";
 
 describe("Authentication & Navigation Security", () => {
   it("safeNextPath prevents open-redirect and protocol vulnerabilities", () => {
@@ -85,56 +83,6 @@ describe("Zone Geometry & Polygon Validation", () => {
       { x: 0.1, y: 0.9 },
     ];
     assert.equal(validateZonePoints(validZone), null);
-  });
-});
-
-describe("Security State & Truthful Status Evaluation", () => {
-  it("treats stale security states as unknown / stale", () => {
-    const staleState: SecurityState = {
-      shopId: "shop_1",
-      desiredState: "ARMED",
-      actualMonitoringState: "MONITORING",
-      cameraState: "ONLINE",
-      aiWorkerState: "ONLINE",
-      reason: "AFTER_CLOSING",
-      evaluatedAt: new Date(Date.now() - (STALE_AFTER_MS + 10000)).toISOString(),
-    };
-    const res = deriveSecurityView({ state: staleState, refreshFailed: false });
-    assert.equal(res.stale, true);
-    assert.equal(res.protectedNow, false);
-    assert.equal(res.state, "UNKNOWN");
-  });
-
-  it("downgrades to DEGRADED when camera is offline even if backend claims MONITORING", () => {
-    const conflictedState: SecurityState = {
-      shopId: "shop_1",
-      desiredState: "ARMED",
-      actualMonitoringState: "MONITORING",
-      cameraState: "OFFLINE",
-      aiWorkerState: "ONLINE",
-      reason: "AFTER_CLOSING",
-      evaluatedAt: new Date().toISOString(),
-    };
-    const res = deriveSecurityView({ state: conflictedState, refreshFailed: false });
-    assert.equal(res.state, "DEGRADED");
-    assert.equal(res.protectedNow, false);
-    assert.equal(res.tone, "warning");
-  });
-
-  it("reports protectedNow true only when fresh, MONITORING, and sub-states agree", () => {
-    const healthyState: SecurityState = {
-      shopId: "shop_1",
-      desiredState: "ARMED",
-      actualMonitoringState: "MONITORING",
-      cameraState: "ONLINE",
-      aiWorkerState: "ONLINE",
-      reason: "AFTER_CLOSING",
-      evaluatedAt: new Date().toISOString(),
-    };
-    const res = deriveSecurityView({ state: healthyState, refreshFailed: false });
-    assert.equal(res.state, "MONITORING");
-    assert.equal(res.protectedNow, true);
-    assert.equal(res.tone, "success");
   });
 });
 

@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
-
 export const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(1, "Password is required"),
@@ -23,23 +21,6 @@ export const shopSchema = z.object({
       postalCode: z.string().optional(),
     })
     .optional(),
-});
-
-export const dayScheduleSchema = z
-  .object({
-    day: z.enum(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]),
-    closed: z.boolean(),
-    closesNextDay: z.boolean(),
-    openTime: z.string().regex(hhmm, "Use HH:mm").optional(),
-    closeTime: z.string().regex(hhmm, "Use HH:mm").optional(),
-  })
-  .refine((d) => d.closed || (d.openTime && d.closeTime), {
-    message: "Open and close time are required on open days",
-  });
-
-export const scheduleSchema = z.object({
-  weeklySchedule: z.array(dayScheduleSchema).length(7),
-  gracePeriodMinutes: z.number().int().min(0).max(60),
 });
 
 export const zoneSchema = z.object({
@@ -72,12 +53,6 @@ export const cameraUpdateSchema = z.object({
 });
 
 
-
-export const manualOverrideSchema = z.object({
-  action: z.enum(["ARM", "DISARM"]),
-  durationMinutes: z.number().int().min(1).max(1440).optional(),
-  reason: z.string().trim().min(1, "Reason is required for audit logs"),
-});
 
 export const reviewEventSchema = z.object({
   reviewStatus: z.enum(["NEW", "REVIEWED", "FALSE_ALARM", "CONFIRMED"]),

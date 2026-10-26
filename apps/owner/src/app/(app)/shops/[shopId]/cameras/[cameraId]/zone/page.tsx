@@ -190,9 +190,8 @@ export default function ZonePage() {
       {saveError && saveError !== problem && <Alert tone="danger">{saveError}</Alert>}
       {saved && !dirty && (
         <Alert tone="success">
-          Zone saved. It applies from the next time monitoring arms.{" "}
-          <Link href="/onboarding" className="font-medium underline">
-            Back to setup
+          Zone saved. <Link href="/dashboard" className="font-medium underline">
+            Back to dashboard
           </Link>
         </Alert>
       )}

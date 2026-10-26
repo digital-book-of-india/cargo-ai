@@ -4,7 +4,6 @@ import { cameraRegisterSchema, cameraUpdateSchema, zoneSchema } from "@dbi/valid
 import { CameraModel, ZoneModel, ShopModel } from "../../../models";
 import { authenticate, requireShopAccess, requireCameraAccess } from "../../../middleware/auth";
 import { encryptSecret, decryptSecret, sanitizeCamera, buildRtspUrl } from "../../../services/secrets/manager";
-import { evaluateShopSecurityState } from "../../../services/security-state/evaluator";
 
 // Mounted at /api/v1/shops -> /:shopId/cameras
 export const shopCamerasRouter = Router();
@@ -53,9 +52,6 @@ shopCamerasRouter.post(
         status: "PENDING_TEST",
         lastFrameAt: null,
       });
-
-      // Recalculate security state for shop
-      await evaluateShopSecurityState(shop._id);
 
       res.status(201).json({
         data: {
@@ -154,9 +150,6 @@ cameraRouter.post(
       camera.lastErrorCode = reachable ? null : errorCode ?? "UNREACHABLE";
       if (reachable) camera.lastFrameAt = now;
       await camera.save();
-
-      // Recalculate shop security state
-      await evaluateShopSecurityState(camera.shopId);
 
       res.json({
         data: {
@@ -356,9 +349,6 @@ cameraRouter.delete(
 
       await CameraModel.findByIdAndDelete(camera._id);
       await ZoneModel.deleteMany({ cameraId: camera._id });
-
-      // Recalculate security state for shop
-      await evaluateShopSecurityState(camera.shopId);
 
       res.json({
         data: {

@@ -1,6 +1,6 @@
 # DBI Intelligence - Owner web (Dev 1)
 
-Shop owners register, set opening hours, connect a CCTV camera, draw a shutter zone and see
+Shop owners register, connect a CCTV camera, draw a shutter zone and see
 alerts. Next.js 14 (App Router) + TypeScript + Tailwind + shadcn-style components.
 
 This app only shows what the API reports. It never claims a shop is protected unless the API
@@ -27,7 +27,6 @@ Other scripts: `npm run lint`, `npm run test`, `npm run typecheck`, `npm run bui
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:4000/api/v1` | Backend base URL (cookie session, `credentials: include`). |
 | `NEXT_PUBLIC_REQUEST_TIMEOUT_MS` | `20000` | Per-request timeout. |
 | `NEXT_PUBLIC_CAMERA_REFRESH_MS` | `15000` | Camera status refresh while the Cameras page is visible. |
-| `NEXT_PUBLIC_SECURITY_REFRESH_MS` | `30000` | Security status refresh on the dashboard. |
 | `NEXT_PUBLIC_ALERTS_REFRESH_MS` | `30000` | New-alert check on the Alerts page. |
 | `NEXT_PUBLIC_NOTIFICATIONS_REFRESH_MS` | `30000` | Refresh on the Notifications page. |
 
@@ -39,9 +38,8 @@ All of these are public (shipped to the browser). Never put a secret in a `NEXT_
 |---|---|
 | `/login`, `/register` | Sign in / create account |
 | `/onboarding` | Setup checklist (shop, hours, camera, test, zone) |
-| `/dashboard` | Security status, today's hours, camera health, latest alerts, manual override |
+| `/dashboard` | Camera health and latest alerts |
 | `/shops/new`, `/shops/:id` | Create and edit a shop |
-| `/shops/:id/schedule` | Weekly hours, overnight, grace period, holidays/special days |
 | `/shops/:id/cameras` | Add/edit a camera, connection test, live status |
 | `/shops/:id/cameras/:cameraId/zone` | Draw the shutter zone (0..1 polygon) |
 | `/shops/:id/alerts`, `/shops/:id/alerts/:eventId` | Alerts list, evidence viewer, review |

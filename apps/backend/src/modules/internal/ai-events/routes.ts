@@ -1,8 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { Types } from "mongoose";
 import { aiEventSchema } from "@dbi/validation";
-import { SecurityEventModel, ShopModel, NotificationModel, SecurityStateModel, CameraModel } from "../../../models";
-import { evaluateShopSecurityState } from "../../../services/security-state/evaluator";
+import { SecurityEventModel, ShopModel, NotificationModel, CameraModel } from "../../../models";
 
 export const aiEventsRouter = Router();
 
@@ -52,23 +51,6 @@ aiEventsRouter.post("/", async (req: Request, res: Response, next: NextFunction)
           code: "NOT_FOUND",
           message: "Target shop not found for this event.",
           requestId: req.requestId,
-        },
-      });
-      return;
-    }
-
-    // Security state truthfulness gating: check if shop is currently ARMED / MONITORING
-    let securityState = await SecurityStateModel.findOne({ shopId: shop._id });
-    if (!securityState) {
-      securityState = (await evaluateShopSecurityState(shop._id)) as any;
-    }
-
-    if (securityState && securityState.desiredState === "DISARMED") {
-      res.status(200).json({
-        data: {
-          eventId,
-          status: "IGNORED_DISARMED",
-          message: "Event ignored: Target shop is currently DISARMED (open business hours).",
         },
       });
       return;

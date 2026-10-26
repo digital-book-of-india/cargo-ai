@@ -7,7 +7,7 @@ import {
   sendError,
   AuthenticatedAdminRequest,
 } from "../../../middleware/adminAuth";
-import { ShopModel, CameraModel, ScheduleModel, AuditLogModel } from "../../../models";
+import { ShopModel, CameraModel, AuditLogModel } from "../../../models";
 import {
   parsePagination,
   escapeRegex,
@@ -123,14 +123,11 @@ adminShopsRouter.patch("/:shopId/status", async (req: Request, res: Response) =>
     let note: string | undefined = undefined;
 
     if (status === "ACTIVE") {
-      const [cameraExists, scheduleExists] = await Promise.all([
-        CameraModel.exists({ shopId }),
-        ScheduleModel.exists({ shopId }),
-      ]);
+      const cameraExists = await CameraModel.exists({ shopId });
 
-      if (!cameraExists || !scheduleExists) {
+      if (!cameraExists) {
         appliedStatus = "PENDING_SETUP";
-        note = "Reactivated as PENDING_SETUP: camera or weekly schedule configuration is missing.";
+        note = "Reactivated as PENDING_SETUP: no camera is configured.";
       }
     }
 

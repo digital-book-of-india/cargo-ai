@@ -4,7 +4,6 @@ import { connectDatabase, disconnectDatabase } from "../config/db";
 import {
   UserModel,
   ShopModel,
-  ScheduleModel,
   CameraModel,
   ZoneModel,
   SecurityEventModel,
@@ -12,13 +11,12 @@ import {
 } from "../models";
 import { hashPassword } from "../utils/auth";
 import { encryptSecret, buildRtspUrl } from "../services/secrets/manager";
-import { evaluateShopSecurityState } from "../services/security-state/evaluator";
 
 async function seed() {
   console.log("🌱 Starting DBI Intelligence database seed...");
   await connectDatabase();
 
-  // 1. Clear previous DEMO data (cascade: a demo shop's cameras/schedules/zones/notifications
+  // 1. Clear previous DEMO data (cascade: a demo shop's cameras/zones/notifications
   // must go with it, otherwise re-running this script leaves orphaned records pointing at a
   // shopId that no longer exists — e.g. the superadmin Health page would list cameras for
   // shops that don't exist anymore.)
@@ -32,7 +30,6 @@ async function seed() {
   if (oldDemoShopIds.length > 0) {
     await Promise.all([
       ZoneModel.deleteMany({ shopId: { $in: oldDemoShopIds } }),
-      ScheduleModel.deleteMany({ shopId: { $in: oldDemoShopIds } }),
       CameraModel.deleteMany({ shopId: { $in: oldDemoShopIds } }),
     ]);
   }
@@ -81,25 +78,6 @@ async function seed() {
     demo: true,
   });
   console.log(`✅ Created Shop: ${shop.name} (${shop._id})`);
-
-  // 4. Create Schedule
-  const weeklySchedule = [
-    { day: "MON", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-    { day: "TUE", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-    { day: "WED", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-    { day: "THU", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-    { day: "FRI", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-    { day: "SAT", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-    { day: "SUN", openTime: "10:00", closeTime: "20:00", closed: true, closesNextDay: false },
-  ];
-
-  await ScheduleModel.create({
-    shopId: shop._id,
-    weeklySchedule,
-    gracePeriodMinutes: 5,
-    version: 1,
-  });
-  console.log("✅ Created 7-day schedule with 5min grace period");
 
   // 5. Create Camera
   // Uses your real camera if CAMERA_RTSP_HOST (etc.) is set in .env — these vars only feed the
@@ -190,10 +168,6 @@ async function seed() {
   });
 
   console.log("✅ Created 2 DEMO security events and notifications");
-
-  // 8. Evaluate initial security state
-  const state = await evaluateShopSecurityState(shop._id);
-  console.log(`✅ Evaluated initial Security State: [Desired: ${state.desiredState}, Actual: ${state.actualMonitoringState}]`);
 
   console.log("\n==========================================");
   console.log("🎉 Seed completed successfully!");

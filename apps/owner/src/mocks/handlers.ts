@@ -12,22 +12,16 @@ import type {
   AppNotification,
   Camera,
   CameraStatus,
-  DaySchedule,
   EventType,
-  MonitoringState,
   Paginated,
   ReviewStatus,
-  Schedule,
   SecurityEvent,
-  SecurityState,
   Shop,
   User,
   Zone,
 } from "@/types";
-import { defaultSchedule, getDb, hashPassword, nextId, saveDb } from "./store";
+import { getDb, hashPassword, nextId, saveDb } from "./store";
 import type { MockCamera } from "./store";
-import { isOpenAt, nextTransitionAt } from "./transition";
-import type { MockException } from "./transition";
 
 interface MockOptions {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -103,79 +97,6 @@ function testBehaviour(url: string): { outcome: CameraStatus; slow: boolean } {
   return { outcome, slow: lower.includes("slow") };
 }
 
-// ---- schedule / security state (simplified: the real logic lives on the server)
-
-function emptySchedule(shopId: string): Schedule {
-  // version 0 and no days means "not configured yet".
-  return { shopId, weeklySchedule: [], gracePeriodMinutes: 5, version: 0 };
-}
-
-function computeSecurityState(shop: Shop): SecurityState & { overrideUntil?: string } {
-  const db = getDb();
-  const schedule = db.schedules[shop.id];
-  const camera = db.cameras.find((c) => c.shopId === shop.id);
-  const evaluatedAt = new Date().toISOString();
-  const base = { shopId: shop.id, aiWorkerState: db.aiWorkerState ?? "ONLINE", evaluatedAt };
-
-  if (!schedule || !camera) {
-    return {
-      ...base,
-      desiredState: "DISARMED",
-      actualMonitoringState: "SETUP_REQUIRED",
-      cameraState: camera ? camera.status : "NO_CAMERA",
-      reason: !schedule ? "SCHEDULE_MISSING" : "NO_CAMERA_CONFIGURED",
-    };
-  }
-
-  const override = db.overrides[shop.id];
-  const overrideActive = override && new Date(override.until).getTime() > Date.now();
-  const desired: "ARMED" | "DISARMED" = overrideActive
-    ? override.state
-    : isOpenAt(schedule, shop.timezone)
-      ? "DISARMED"
-      : "ARMED";
-  const reason = overrideActive
-    ? `MANUAL_OVERRIDE: ${override.reason ?? ""}`.trim()
-    : desired === "ARMED"
-      ? "AFTER_CLOSING"
-      : "SHOP_OPEN";
-
-  let actual: MonitoringState;
-  if (desired === "DISARMED") {
-    actual = "DISARMED";
-  } else if (camera.status === "ONLINE") {
-    actual = "MONITORING";
-  } else {
-    actual = "OFFLINE";
-  }
-
-  // the AI worker being down means nothing can be called monitoring
-  if (actual === "MONITORING" && base.aiWorkerState !== "ONLINE") actual = "DEGRADED";
-
-  return {
-    ...base,
-    desiredState: desired,
-    actualMonitoringState: actual,
-    cameraState: camera.status,
-    reason,
-    ...(overrideActive ? { overrideUntil: override.until } : {}),
-  };
-}
-
-// Exceptions are optional. A bad entry rejects the whole request, like the real API should.
-function validateExceptions(raw: unknown): MockException[] | undefined {
-  if (raw === undefined) return undefined;
-  if (!Array.isArray(raw)) fail(400, "VALIDATION_ERROR", "Exceptions must be a list.");
-  const seen = new Set<string>();
-  for (const e of raw as MockException[]) {
-    if (!e || typeof e.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(e.date)) {
-      fail(400, "VALIDATION_ERROR", "Each exception needs a date (YYYY-MM-DD).");
-    }
-    if (seen.has(e.date)) fail(400, "VALIDATION_ERROR", `Duplicate exception date ${e.date}.`);
-    seen.add(e.date);
-  }
-  return raw as MockException[];
-}
 
 // ---- events
 
@@ -343,7 +264,6 @@ const routes: Route[] = [
       };
       const db = getDb();
       db.shops.push(shop);
-      db.schedules[shop.id] = defaultSchedule(shop.id);
       saveDb();
       return { shop };
     },
@@ -368,89 +288,6 @@ const routes: Route[] = [
       if (b.address && typeof b.address === "object") shop.address = b.address as Shop["address"];
       saveDb();
       return { shop };
-    },
-  },
-
-  // schedule
-  {
-    method: "GET",
-    pattern: /^\/shops\/([^/]+)\/schedule$/,
-    handle: (m) => {
-      const shop = requireShop(m[1]);
-      const saved = getDb().schedules[shop.id];
-      if (!saved) fail(404, "NOT_FOUND", "Schedule not found for this shop.");
-      // the real API sends no nextTransitionAt on GET; the UI must not depend on it
-      return { ...saved };
-    },
-  },
-  {
-    method: "PUT",
-    pattern: /^\/shops\/([^/]+)\/schedule$/,
-    handle: (m, o) => {
-      const shop = requireShop(m[1]);
-      const b = asRecord(o.body);
-      const weekly = b.weeklySchedule;
-      if (!Array.isArray(weekly) || weekly.length !== 7) {
-        fail(400, "VALIDATION_ERROR", "Array must contain exactly 7 element(s)");
-      }
-      for (const d of weekly as DaySchedule[]) {
-        if (d && !d.closed && !(d.openTime && d.closeTime)) {
-          fail(400, "VALIDATION_ERROR", "Open and close time are required on open days");
-        }
-      }
-      const grace = Number(b.gracePeriodMinutes ?? 5);
-      if (!Number.isInteger(grace) || grace < 0 || grace > 60) {
-        fail(400, "VALIDATION_ERROR", "Grace period must be between 0 and 60 minutes.");
-      }
-      const exceptions = validateExceptions(b.exceptions);
-      const db = getDb();
-      const prev = db.schedules[shop.id];
-      const schedule: Schedule = {
-        shopId: shop.id,
-        weeklySchedule: weekly as DaySchedule[],
-        gracePeriodMinutes: grace,
-        version: (prev?.version ?? 0) + 1,
-        ...(exceptions ? { exceptions: exceptions.map((e) => ({ ...e, closed: e.closed === true })) } : {}),
-      };
-      db.schedules[shop.id] = schedule;
-      saveDb();
-      // Same shape as the handoff example: no weekly days in the response.
-      return {
-        shopId: shop.id,
-        timezone: shop.timezone,
-        version: schedule.version,
-        securityState: computeSecurityState(shop),
-      };
-    },
-  },
-
-  // security state + override
-  {
-    method: "GET",
-    pattern: /^\/shops\/([^/]+)\/security-state$/,
-    handle: (m) => computeSecurityState(requireShop(m[1])),
-  },
-  {
-    method: "POST",
-    pattern: /^\/shops\/([^/]+)\/override$/,
-    handle: (m, o) => {
-      const shop = requireShop(m[1]);
-      const b = asRecord(o.body);
-      const action = b.action === "ARM" || b.action === "DISARM" ? b.action : null;
-      const reason = typeof b.reason === "string" ? b.reason.trim() : "";
-      const minutes = b.durationMinutes === undefined ? 60 : Number(b.durationMinutes);
-      if (!action) fail(400, "VALIDATION_ERROR", "Invalid enum value. Expected 'ARM' | 'DISARM'");
-      if (!reason) fail(400, "VALIDATION_ERROR", "Reason is required for audit logs");
-      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
-        fail(400, "VALIDATION_ERROR", "Duration must be between 1 and 1440 minutes");
-      }
-      getDb().overrides[shop.id] = {
-        state: action === "ARM" ? "ARMED" : "DISARMED",
-        until: new Date(Date.now() + minutes * 60_000).toISOString(),
-        reason,
-      };
-      saveDb();
-      return computeSecurityState(shop);
     },
   },
 

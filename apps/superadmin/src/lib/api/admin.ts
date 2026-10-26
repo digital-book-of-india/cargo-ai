@@ -10,7 +10,6 @@ export interface OverviewData {
     totalCameras: number;
     onlineCameras: number;
     cameraOnlineRate: number | null;
-    activeMonitoringShops: number;
     unreviewedAlerts: number;
   };
   aiWorker: {
@@ -92,7 +91,6 @@ export async function getAdminOverview(): Promise<OverviewData> {
         totalCameras: 15,
         onlineCameras: 13,
         cameraOnlineRate: 87,
-        activeMonitoringShops: 7,
         unreviewedAlerts: 3,
       },
       aiWorker: { status: "ONLINE", lastHeartbeatAt: new Date().toISOString(), isStale: false },

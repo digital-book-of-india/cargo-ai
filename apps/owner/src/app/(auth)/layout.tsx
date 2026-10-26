@@ -9,8 +9,8 @@ const points = [
   { icon: Video, title: "Works with your existing CCTV", text: "No new sensors or lock hardware." },
   {
     icon: Clock3,
-    title: "Armed only after closing time",
-    text: "Follows your weekly schedule and timezone.",
+    title: "Honest status",
+    text: "Shows offline or degraded instead of pretending to protect.",
   },
   {
     icon: BellRing,

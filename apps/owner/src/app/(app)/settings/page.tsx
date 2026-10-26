@@ -32,7 +32,7 @@ export default function SettingsPage() {
         <Card className="p-5">
           <h2 className="font-semibold">Your shop</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Name, time zone and address are on the shop profile. Opening hours and cameras have their own
+            Name, time zone and address are on the shop profile. Cameras have their own
             pages.
           </p>
           {current && (

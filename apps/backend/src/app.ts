@@ -6,7 +6,6 @@ import { errorHandler } from "./middleware/errorHandler";
 import { requestId } from "./middleware/requestId";
 import { authRouter } from "./modules/auth/routes";
 import { shopsRouter } from "./modules/owner/shops/routes";
-import { schedulesRouter } from "./modules/owner/schedules/routes";
 import { shopCamerasRouter, cameraRouter } from "./modules/owner/cameras/routes";
 import { shopEventsRouter, eventRouter } from "./modules/owner/events/routes";
 import { notificationsRouter } from "./modules/owner/notifications/routes";
@@ -97,7 +96,6 @@ app.get("/health", (_req, res) => {
 const v1 = express.Router();
 v1.use("/auth", authRouter);
 v1.use("/shops", shopsRouter);
-v1.use("/shops", schedulesRouter);
 v1.use("/shops", shopCamerasRouter);
 v1.use("/cameras", cameraRouter);
 v1.use("/shops", shopEventsRouter);

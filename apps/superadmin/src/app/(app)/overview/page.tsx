@@ -45,7 +45,7 @@ export default function OverviewPage() {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <div className="p-5 bg-white border border-[#DBEAFE] rounded-xl shadow-sm">
           <span className="text-xs font-semibold uppercase text-gray-500">Total Registered Shops</span>
           <div className="text-3xl font-extrabold text-[#0F172A] mt-2">{data.kpis.totalShops}</div>
@@ -53,12 +53,6 @@ export default function OverviewPage() {
             Active: <strong className="text-green-600">{data.kpis.activeShops}</strong> | Suspended:{" "}
             <strong className="text-red-500">{data.kpis.suspendedShops}</strong>
           </p>
-        </div>
-
-        <div className="p-5 bg-white border border-[#DBEAFE] rounded-xl shadow-sm">
-          <span className="text-xs font-semibold uppercase text-gray-500">Active Monitoring Shops</span>
-          <div className="text-3xl font-extrabold text-[#2563EB] mt-2">{data.kpis.activeMonitoringShops}</div>
-          <p className="text-xs text-gray-400 mt-1">Armed and verified within grace schedule</p>
         </div>
 
         <div className="p-5 bg-white border border-[#DBEAFE] rounded-xl shadow-sm">

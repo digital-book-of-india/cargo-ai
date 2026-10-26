@@ -1,9 +1,7 @@
 import {
   Bell,
-  CalendarClock,
   Camera,
   LayoutDashboard,
-  ListChecks,
   Settings,
   ShieldAlert,
   Store,
@@ -29,14 +27,12 @@ export interface NavGroups {
 // Shop-scoped links need the current shop id. Without a shop they are left out.
 export function buildNav(shopId: string | null): NavGroups {
   const dashboard: NavItem = { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
-  const setup: NavItem = { href: "/onboarding", label: "Setup", icon: ListChecks };
   const settings: NavItem = { href: "/settings", label: "Settings", icon: Settings };
   const notifications: NavItem = { href: "/notifications", label: "Notifications", icon: Bell };
 
   const shop: NavItem[] = shopId
     ? [
         { href: `/shops/${shopId}`, label: "Shop profile", icon: Store, exact: true },
-        { href: `/shops/${shopId}/schedule`, label: "Opening hours", icon: CalendarClock },
         { href: `/shops/${shopId}/cameras`, label: "Cameras", icon: Camera },
         { href: `/shops/${shopId}/alerts`, label: "Alerts", icon: ShieldAlert },
       ]
@@ -47,10 +43,10 @@ export function buildNav(shopId: string | null): NavGroups {
     : notifications;
 
   return {
-    main: [dashboard, setup],
+    main: [dashboard],
     shop,
     account: [notifications, settings],
-    tabs: [dashboard, setup, alertsTab, settings],
+    tabs: [dashboard, alertsTab, settings],
   };
 }
 

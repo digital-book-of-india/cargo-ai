@@ -1,8 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { shopSchema } from "@dbi/validation";
-import { ShopModel, ScheduleModel } from "../../../models";
+import { ShopModel } from "../../../models";
 import { authenticate, requireShopAccess } from "../../../middleware/auth";
-import { evaluateShopSecurityState } from "../../../services/security-state/evaluator";
 
 export const shopsRouter = Router();
 
@@ -42,26 +41,6 @@ shopsRouter.post("/", authenticate, async (req: Request, res: Response, next: Ne
       address,
       status: "PENDING_SETUP",
     });
-
-    // Create default initial schedule
-    const defaultWeeklySchedule = [
-      { day: "MON", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-      { day: "TUE", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-      { day: "WED", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-      { day: "THU", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-      { day: "FRI", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-      { day: "SAT", openTime: "10:00", closeTime: "22:00", closed: false, closesNextDay: false },
-      { day: "SUN", openTime: "10:00", closeTime: "20:00", closed: false, closesNextDay: false },
-    ];
-
-    await ScheduleModel.create({
-      shopId: shop._id,
-      weeklySchedule: defaultWeeklySchedule,
-      gracePeriodMinutes: 5,
-      version: 1,
-    });
-
-    await evaluateShopSecurityState(shop._id);
 
     res.status(201).json({
       data: {

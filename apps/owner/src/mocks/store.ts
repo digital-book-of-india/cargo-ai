@@ -4,9 +4,6 @@ import type {
   AppNotification,
   Camera,
   CameraStatus,
-  Day,
-  DaySchedule,
-  Schedule,
   SecurityEvent,
   Shop,
   User,
@@ -36,19 +33,11 @@ export interface MockCamera extends Camera {
   testSlow?: boolean;
 }
 
-export interface MockOverride {
-  state: "ARMED" | "DISARMED";
-  until: string; // UTC ISO-8601
-  reason?: string;
-}
-
 export interface MockDb {
   seq: number;
   sessionUserId: string | null;
   users: MockUser[];
   shops: Shop[];
-  schedules: Record<string, Schedule>;
-  overrides: Record<string, MockOverride>;
   /** dev knob: what the mock AI worker reports (default ONLINE) */
   aiWorkerState?: string;
   /** notification preferences by user id */
@@ -65,23 +54,6 @@ const KEY = "dbi-owner-mock-db";
 export const DEMO_USER_EMAIL = "owner@demo.test";
 export const DEMO_USER_PASSWORD = "Demo@1234";
 
-// The real backend creates this schedule together with every shop (version 1). It has not been
-// reviewed by the owner until a save raises the version.
-export function defaultSchedule(shopId: string): Schedule {
-  const day = (d: Day, close = "22:00"): DaySchedule => ({
-    day: d,
-    openTime: "10:00",
-    closeTime: close,
-    closed: false,
-    closesNextDay: false,
-  });
-  return {
-    shopId,
-    weeklySchedule: [day("MON"), day("TUE"), day("WED"), day("THU"), day("FRI"), day("SAT"), day("SUN", "20:00")],
-    gracePeriodMinutes: 5,
-    version: 1,
-  };
-}
 
 function freshDb(): MockDb {
   return {
@@ -109,8 +81,6 @@ function freshDb(): MockDb {
         demo: true,
       },
     ],
-    schedules: { shop_demo: defaultSchedule("shop_demo") },
-    overrides: {},
     cameras: [],
     zones: {},
     events: [],
