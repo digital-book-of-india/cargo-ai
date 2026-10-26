@@ -1,0 +1,405 @@
+openapi: 3.0.3
+info:
+  title: DBI Intelligence - Vision API (Dev 2)
+  version: 0.2.0
+  description: |
+    Zones, counts, monitoring and AI ingestion. Owner endpoints use the user session
+    (Bearer token or dbi_token cookie). Internal endpoints require x-service-token.
+    IDs are MongoDB ObjectIds (24 hex chars). The API field "siteId" maps to the Shop record.
+servers:
+  - url: http://localhost:4000
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/zones:
+    get:
+      summary: List zones of a site
+      parameters:
+        - { name: siteId, in: query, required: true, schema: { type: string } }
+        - { name: cameraId, in: query, schema: { type: string } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200": { description: Zone list, content: { application/json: { schema: { $ref: "#/components/schemas/ZoneList" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      summary: Create a zone (status draft, validation pending)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SaveZone" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/ZoneEnvelope" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/zones/{zoneId}:
+    parameters:
+      - { name: zoneId, in: path, required: true, schema: { type: string } }
+    get:
+      summary: Get a zone
+      responses:
+        "200": { description: Zone, content: { application/json: { schema: { $ref: "#/components/schemas/ZoneEnvelope" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      summary: Update a zone. Any geometry, rules or type change resets the zone to draft.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PatchZone" } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/ZoneEnvelope" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+  /api/v1/zones/{zoneId}/validate:
+    post:
+      summary: Validate geometry, rules and camera ownership. passed=false is a result, not an error.
+      parameters:
+        - { name: zoneId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Validation result, content: { application/json: { schema: { $ref: "#/components/schemas/ValidateResult" } } } }
+  /api/v1/zones/{zoneId}/enable:
+    post:
+      summary: Enable a zone for monitoring. Requires a passed validation for the same configuration.
+      parameters:
+        - { name: zoneId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Zone active, content: { application/json: { schema: { $ref: "#/components/schemas/ZoneEnvelope" } } } }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/counts/summary:
+    get:
+      summary: Counts grouped by zone, camera or day (day uses the site timezone)
+      parameters:
+        - { name: siteId, in: query, required: true, schema: { type: string } }
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: groupBy, in: query, schema: { type: string, enum: [zone, camera, day, shift], default: zone } }
+      responses:
+        "200": { description: Summary, content: { application/json: { schema: { $ref: "#/components/schemas/CountSummary" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+  /api/v1/counts/ledger:
+    get:
+      summary: Paginated count ledger (counted rows only)
+      parameters:
+        - { name: siteId, in: query, required: true, schema: { type: string } }
+        - { name: zoneId, in: query, schema: { type: string } }
+        - { name: cameraId, in: query, schema: { type: string } }
+        - { name: direction, in: query, schema: { type: string, enum: [IN, OUT, UNKNOWN] } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200": { description: Ledger page, content: { application/json: { schema: { $ref: "#/components/schemas/LedgerPage" } } } }
+  /api/v1/monitoring/status:
+    get:
+      summary: Coverage, limitations and health per camera of a site
+      parameters:
+        - { name: siteId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Status, content: { application/json: { schema: { $ref: "#/components/schemas/MonitoringStatus" } } } }
+  /api/v1/monitoring/cameras/{cameraId}/start:
+    post:
+      summary: Start monitoring. Requires at least one active zone.
+      parameters:
+        - { name: cameraId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Camera status, content: { application/json: { schema: { $ref: "#/components/schemas/MonitoringItem" } } } }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/monitoring/cameras/{cameraId}/stop:
+    post:
+      summary: Stop monitoring
+      parameters:
+        - { name: cameraId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Camera status, content: { application/json: { schema: { $ref: "#/components/schemas/MonitoringItem" } } } }
+  /internal/v1/ai/events:
+    post:
+      summary: Ingest one AI event (Appendix A). Idempotent by eventKey.
+      security:
+        - serviceToken: []
+      parameters:
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string }, description: Must equal eventKey when sent }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/IngestEvent" } } }
+      responses:
+        "202": { description: Accepted (new event), content: { application/json: { schema: { $ref: "#/components/schemas/IngestResult" } } } }
+        "200": { description: Duplicate with the same payload, content: { application/json: { schema: { $ref: "#/components/schemas/IngestResult" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /internal/v1/monitoring/heartbeat:
+    post:
+      summary: Worker heartbeat with per-camera frame status
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkerHeartbeat" } } }
+      responses:
+        "200": { description: Accepted counts, content: { application/json: { schema: { type: object } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+  /internal/v1/monitoring/config:
+    get:
+      summary: Worker config (enabled cameras with active zones, no secrets)
+      security:
+        - serviceToken: []
+      parameters:
+        - { name: workerId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Config, content: { application/json: { schema: { $ref: "#/components/schemas/WorkerConfig" } } } }
+        "401": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    serviceToken:
+      type: apiKey
+      in: header
+      name: x-service-token
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties:
+                  code: { type: string, example: VALIDATION_ERROR }
+                  message: { type: string }
+                  requestId: { type: string }
+  schemas:
+    Point:
+      type: array
+      minItems: 2
+      maxItems: 2
+      items: { type: number, minimum: 0, maximum: 1 }
+    Geometry:
+      type: object
+      required: [coordinateSpace]
+      properties:
+        coordinateSpace: { type: string, enum: [normalized_0_1] }
+        line: { type: array, minItems: 2, maxItems: 2, items: { $ref: "#/components/schemas/Point" } }
+        polygon: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/Point" } }
+    Rules:
+      type: object
+      required: [objectClasses, minimumConfidence, countOncePerTrackPerRule]
+      properties:
+        objectClasses: { type: array, minItems: 1, maxItems: 3, items: { type: string, enum: [package, box, pallet] } }
+        minimumConfidence: { type: number, minimum: 0, maximum: 1 }
+        countDirection: { type: string, enum: [A_TO_B, B_TO_A, EITHER] }
+        countOncePerTrackPerRule: { type: boolean }
+        afterHours:
+          type: object
+          required: [enabled, start, end]
+          properties:
+            enabled: { type: boolean }
+            start: { type: string, example: "22:00" }
+            end: { type: string, example: "06:00" }
+    SaveZone:
+      type: object
+      required: [siteId, cameraId, name, zoneType, geometry, rules]
+      properties:
+        siteId: { type: string }
+        cameraId: { type: string }
+        name: { type: string, maxLength: 80 }
+        zoneType: { type: string, enum: [polygon, counting_line, loading_bay, restricted, storage] }
+        geometry: { $ref: "#/components/schemas/Geometry" }
+        rules: { $ref: "#/components/schemas/Rules" }
+    PatchZone:
+      type: object
+      properties:
+        name: { type: string, maxLength: 80 }
+        zoneType: { type: string, enum: [polygon, counting_line, loading_bay, restricted, storage] }
+        geometry: { $ref: "#/components/schemas/Geometry" }
+        rules: { $ref: "#/components/schemas/Rules" }
+    Zone:
+      type: object
+      properties:
+        id: { type: string }
+        siteId: { type: string }
+        cameraId: { type: string }
+        name: { type: string }
+        zoneType: { type: string }
+        geometry: { $ref: "#/components/schemas/Geometry" }
+        rules: { $ref: "#/components/schemas/Rules" }
+        status: { type: string, enum: [draft, active, disabled, archived] }
+        validationStatus: { type: string, enum: [pending, valid, invalid] }
+        validationIssues: { type: array, items: { type: string } }
+    ZoneEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            zone: { $ref: "#/components/schemas/Zone" }
+    ZoneList:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/Zone" } }
+            nextCursor: { type: string, nullable: true }
+    ValidateResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            passed: { type: boolean }
+            zone: { $ref: "#/components/schemas/Zone" }
+    IngestEvent:
+      type: object
+      required: [eventKey, companyId, siteId, cameraId, eventType, occurredAt]
+      properties:
+        eventKey: { type: string, maxLength: 200 }
+        companyId: { type: string, description: Accepted for compatibility only. Never used for authorization. }
+        siteId: { type: string }
+        cameraId: { type: string }
+        zoneId: { type: string, nullable: true, description: Required for zone and line events }
+        eventType:
+          type: string
+          enum: [package_detected, package_line_crossing, zone_entry, zone_exit, restricted_zone_movement, unusual_after_hours_movement, count_mismatch, possible_package_damage, possible_seal_appearance_change, camera_offline, ai_service_unavailable]
+        occurredAt: { type: string, format: date-time }
+        track:
+          type: object
+          required: [trackId, class, confidence, bbox]
+          properties:
+            trackId: { type: string, maxLength: 160 }
+            class: { type: string, maxLength: 80 }
+            confidence: { type: number, minimum: 0, maximum: 1 }
+            bbox: { type: array, minItems: 4, maxItems: 4, items: { type: number, minimum: 0, maximum: 1 } }
+        movement:
+          type: object
+          required: [direction, countDelta]
+          properties:
+            direction: { type: string, enum: [IN, OUT, UNKNOWN] }
+            countDelta: { type: integer, enum: [0, 1] }
+        evidence:
+          type: object
+          description: Storage keys only. URLs and paths are rejected.
+          properties:
+            snapshotObjectKey: { type: string, nullable: true }
+            clipObjectKey: { type: string, nullable: true }
+        model:
+          type: object
+          properties:
+            name: { type: string }
+            version: { type: string }
+    IngestResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            eventId: { type: string }
+            ingestionStatus: { type: string, enum: [accepted, duplicate] }
+    LedgerPage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string }
+                  eventKey: { type: string }
+                  zoneId: { type: string }
+                  cameraId: { type: string }
+                  trackId: { type: string }
+                  direction: { type: string }
+                  countDelta: { type: integer, enum: [1] }
+                  confidence: { type: number, nullable: true }
+                  occurredAt: { type: string, format: date-time }
+            nextCursor: { type: string, nullable: true }
+    CountSummary:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            groupBy: { type: string }
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  key: { type: string }
+                  in: { type: integer }
+                  out: { type: integer }
+                  unknown: { type: integer }
+                  total: { type: integer }
+    MonitoringItem:
+      type: object
+      properties:
+        cameraId: { type: string }
+        cameraName: { type: string }
+        enabled: { type: boolean }
+        coverage: { type: string, enum: [LIVE, DEGRADED, OFFLINE, NOT_MONITORED] }
+        limitations:
+          type: array
+          items:
+            type: string
+            enum: [MONITORING_DISABLED, NO_ACTIVE_ZONE, NO_FRAME_REPORTED, STREAM_STALE, STREAM_RECONNECTING, STREAM_ERROR, WORKER_UNAVAILABLE]
+        streamStatus: { type: string, enum: [UNKNOWN, STREAMING, RECONNECTING, ERROR] }
+        lastFrameAt: { type: string, format: date-time, nullable: true }
+        activeZoneCount: { type: integer }
+        workerStatus: { type: string, enum: [ONLINE, DEGRADED, OFFLINE, UNKNOWN] }
+    MonitoringStatus:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            checkedAt: { type: string, format: date-time }
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/MonitoringItem" }
+    WorkerHeartbeat:
+      type: object
+      required: [workerId, status, sentAt, cameras]
+      properties:
+        workerId: { type: string }
+        status: { type: string, enum: [ONLINE, DEGRADED, OFFLINE] }
+        sentAt: { type: string, format: date-time }
+        cameras:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [cameraId, streamStatus, lastFrameAt]
+            properties:
+              cameraId: { type: string }
+              streamStatus: { type: string, enum: [STREAMING, RECONNECTING, ERROR] }
+              lastFrameAt: { type: string, format: date-time, nullable: true }
+              frameRate: { type: number, nullable: true }
+              errorCode: { type: string, nullable: true }
+    WorkerConfig:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            workerId: { type: string }
+            heartbeatIntervalSeconds: { type: integer }
+            cameras:
+              type: array
+              items:
+                type: object
+                properties:
+                  cameraId: { type: string }
+                  siteId: { type: string }
+                  zones:
+                    type: array
+                    items: { $ref: "#/components/schemas/Zone" }

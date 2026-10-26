@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Alert } from "@/components/common/States";
 import { Button, TextField } from "@/components/ui";
-import { USE_MOCKS } from "@/lib/api/client";
 import { friendlyMessage } from "@/lib/api/messages";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { zodFieldErrors } from "@/lib/utils/forms";
@@ -38,7 +37,7 @@ export function LoginForm() {
 
     setSubmitting(true);
     try {
-      await login(parsed.data); // RedirectIfAuthed then moves the user on
+      await login(parsed.data);
     } catch (err) {
       setFormError(friendlyMessage(err));
       setSubmitting(false);
@@ -51,7 +50,7 @@ export function LoginForm() {
     <form onSubmit={onSubmit} noValidate className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-3xl font-semibold tracking-tight">Welcome back</h1>
-        <p className="text-base text-muted-foreground">Sign in to check your shop&apos;s monitoring status.</p>
+        <p className="text-base text-muted-foreground">Sign in to check your monitoring status.</p>
       </div>
 
       {expired && <Alert tone="warning">Your session expired. Please sign in again.</Alert>}
@@ -91,14 +90,6 @@ export function LoginForm() {
           Create an account
         </Link>
       </p>
-
-      {USE_MOCKS && (
-        <p className="rounded-lg border border-dashed border-warning/40 bg-warning/5 p-3 text-xs text-muted-foreground">
-          <span className="font-semibold text-warning">DEMO</span> sign in with{" "}
-          <strong className="text-foreground">owner@demo.test</strong> /{" "}
-          <strong className="text-foreground">Demo@1234</strong>, or create a new account.
-        </p>
-      )}
     </form>
   );
 }

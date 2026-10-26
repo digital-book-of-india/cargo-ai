@@ -7,3 +7,10 @@ export * from "./SecurityEvent";
 export * from "./Notification";
 export * from "./AuditLog";
 export * from "./AiWorkerHealth";
+export * from "./VisionZone";
+
+export * from "./VisionEvent";
+
+export * from "./VisionCountLedger";
+
+export * from "./VisionCameraMonitor";

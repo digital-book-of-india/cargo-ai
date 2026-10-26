@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
 import { requestId } from "./middleware/requestId";
+import { serviceAuth } from "./middleware/serviceAuth";
 import { authRouter } from "./modules/auth/routes";
 import { shopsRouter } from "./modules/owner/shops/routes";
 import { shopCamerasRouter, cameraRouter } from "./modules/owner/cameras/routes";
@@ -15,14 +16,18 @@ import { adminOwnersRouter } from "./modules/superadmin/owners/routes";
 import { adminShopsRouter } from "./modules/superadmin/shops/routes";
 import { adminHealthRouter } from "./modules/superadmin/health/routes";
 import { adminAuditLogsRouter } from "./modules/superadmin/audit-logs/routes";
-import { aiEventsRouter } from "./modules/internal/ai-events/routes";
 import { aiHealthRouter } from "./modules/internal/ai-health/routes";
 import { internalCamerasRouter } from "./modules/internal/cameras/routes";
 import { evidenceUploadRouter } from "./modules/internal/evidence-upload/routes";
-
+// Dev 2 (Vision) modules
+import { visionZonesRouter } from "./modules/vision/zones/routes";
+import { visionCountsRouter } from "./modules/vision/counts/routes";
+import { visionIngestRouter } from "./modules/vision/ingestion/routes";
+import { visionMonitoringRouter } from "./modules/vision/monitoring/routes";
+import { visionWorkerRouter } from "./modules/vision/monitoring/worker-routes";
 export const app = express();
 
-// 1. Assign unique UUID requestId to every incoming request
+// 1. Assign unique requestId to every incoming request
 app.use(requestId);
 
 // Security headers + a conservative CSP (evidence images/clips are same-origin signed links).
@@ -48,11 +53,7 @@ app.use(
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  ...(Array.isArray(env.corsOrigins)
-    ? env.corsOrigins
-    : env.corsOrigins
-    ? String(env.corsOrigins).split(",").map((s) => s.trim())
-    : []),
+  ...env.corsOrigins,
 ];
 
 const corsOptions: cors.CorsOptions = {
@@ -75,7 +76,7 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-request-id", "x-service-token"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-request-id", "x-service-token", "Idempotency-Key"],
   exposedHeaders: ["x-request-id"],
   optionsSuccessStatus: 204,
 };
@@ -84,8 +85,8 @@ const corsOptions: cors.CorsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// 3. Body Parser
-app.use(express.json());
+// 3. Body Parser (small limit: ingestion payloads are tiny; evidence goes through multipart upload)
+app.use(express.json({ limit: "100kb" }));
 
 // 4. Health Check
 app.get("/health", (_req, res) => {
@@ -102,7 +103,9 @@ v1.use("/shops", shopEventsRouter);
 v1.use("/events", eventRouter);
 v1.use("/notifications", notificationsRouter);
 v1.use("/evidence", evidenceRouter);
-
+v1.use("/zones", visionZonesRouter); // Dev 2
+v1.use("/counts", visionCountsRouter); // Dev 2
+v1.use("/monitoring", visionMonitoringRouter); // Dev 2
 // Dev 2 Super Admin Endpoints
 v1.use("/admin/overview", adminOverviewRouter);
 v1.use("/admin/owners", adminOwnersRouter);
@@ -111,10 +114,10 @@ v1.use("/admin/cameras/health", adminHealthRouter);
 v1.use("/admin/audit-logs", adminAuditLogsRouter);
 
 // 6. Service-auth internal router (AI worker)
-import { serviceAuth } from "./middleware/serviceAuth";
 const internal = express.Router();
 internal.use(serviceAuth);
-internal.use("/ai/events", aiEventsRouter);
+internal.use("/ai/events", visionIngestRouter); // Dev 2: Appendix A ingestion
+internal.use("/monitoring", visionWorkerRouter); // Dev 2: worker heartbeat & config
 internal.use("/ai/health", aiHealthRouter);
 internal.use("/cameras", internalCamerasRouter);
 internal.use("/evidence", evidenceUploadRouter);

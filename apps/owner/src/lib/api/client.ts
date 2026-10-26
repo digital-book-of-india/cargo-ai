@@ -3,7 +3,6 @@ import { ApiError } from "./errors";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1";
-export const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
 
 // A request that has not answered by then is reported as a timeout.
 export const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_REQUEST_TIMEOUT_MS ?? 20_000);
@@ -24,7 +23,6 @@ interface RequestOptions {
 }
 
 // Single entry point for all backend calls. Success responses are { data: T }.
-// With NEXT_PUBLIC_USE_MOCKS=true the same call is answered by src/mocks (DEMO data).
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   try {
     return await send<T>(path, options);
@@ -41,12 +39,6 @@ async function send<T>(
   path: string,
   { method = "GET", body, query, signal }: RequestOptions
 ): Promise<T> {
-  if (USE_MOCKS) {
-    // Dynamic import keeps the mock layer out of the bundle when mocks are off.
-    const { mockRequest } = await import("@/mocks/handlers");
-    return mockRequest<T>(path, { method, body, query });
-  }
-
   const url = new URL(API_BASE_URL + path);
   if (query) {
     for (const [k, v] of Object.entries(query)) {
@@ -71,7 +63,7 @@ async function send<T>(
         method,
         headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        credentials: "include", // session cookie; revisit if the backend uses bearer tokens
+        credentials: "include", // session cookie
         signal: controller.signal,
       });
     } catch {
@@ -115,6 +107,5 @@ export async function readResponse<T>(res: Response): Promise<T> {
   if (json && typeof json === "object" && "data" in json) {
     return (json as { data: T }).data;
   }
-  // 204 / empty body / unwrapped payload
   return (json ?? null) as T;
 }

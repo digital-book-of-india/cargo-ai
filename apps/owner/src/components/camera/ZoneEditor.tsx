@@ -4,51 +4,62 @@ import { useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import { Eraser, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui";
-import { MAX_POINTS, ZONE_PRESETS, clamp01 } from "@/lib/zone";
 import { cn } from "@/lib/utils/cn";
-import type { Point } from "@/types";
+import type { VisionCountDirection, VisionPoint, VisionZoneType } from "@dbi/api-types";
 
 const W = 1600;
 
 interface Props {
-  points: Point[];
-  onChange: (points: Point[]) => void;
-  /** outline is not acceptable (crosses itself, too small, ...) */
+  zoneType: VisionZoneType;
+  points: VisionPoint[];
+  countDirection?: VisionCountDirection;
+  onChange: (points: VisionPoint[]) => void;
   invalid?: boolean;
   disabled?: boolean;
-  /** optional picture of the camera frame to draw over (an object URL kept in the browser) */
   backgroundUrl?: string;
-  /** width / height of the canvas; 16:9 when not given */
   aspect?: number;
 }
 
-// Click on the picture area to add points, drag a point to move it, or use the keyboard:
-// arrow keys nudge the selected point (Shift for bigger steps), Delete removes it.
-export function ZoneEditor({ points, onChange, invalid, disabled, backgroundUrl, aspect = 16 / 9 }: Props) {
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
+export function ZoneEditor({
+  zoneType,
+  points,
+  countDirection = "A_TO_B",
+  onChange,
+  invalid,
+  disabled,
+  backgroundUrl,
+  aspect = 16 / 9,
+}: Props) {
   const H = Math.round(W / aspect);
   const svgRef = useRef<SVGSVGElement>(null);
   const dragging = useRef<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  // Always the newest points, even when several events arrive before React re-renders.
-  const latest = useRef<Point[]>(points);
+  const latest = useRef<VisionPoint[]>(points);
   latest.current = points;
 
-  function commit(next: Point[]) {
+  const isLine = zoneType === "counting_line";
+  const maxPoints = isLine ? 2 : 100;
+
+  function commit(next: VisionPoint[]) {
     latest.current = next;
     onChange(next);
   }
 
-  function toNormalized(e: { clientX: number; clientY: number }): Point {
+  function toNormalized(e: { clientX: number; clientY: number }): VisionPoint {
     const rect = svgRef.current!.getBoundingClientRect();
-    return {
-      x: clamp01((e.clientX - rect.left) / rect.width),
-      y: clamp01((e.clientY - rect.top) / rect.height),
-    };
+    return [
+      clamp01((e.clientX - rect.left) / rect.width),
+      clamp01((e.clientY - rect.top) / rect.height),
+    ];
   }
 
   function addPoint(e: PointerEvent<SVGRectElement>) {
     const current = latest.current;
-    if (disabled || current.length >= MAX_POINTS) return;
+    if (disabled || current.length >= maxPoints) return;
     commit([...current, toNormalized(e)]);
     setSelected(current.length);
   }
@@ -77,7 +88,7 @@ export function ZoneEditor({ points, onChange, invalid, disabled, backgroundUrl,
       e.preventDefault();
       const next = latest.current.slice();
       if (!next[index]) return;
-      next[index] = { x: clamp01(next[index].x + dx), y: clamp01(next[index].y + dy) };
+      next[index] = [clamp01(next[index][0] + dx), clamp01(next[index][1] + dy)];
       commit(next);
     };
     if (e.key === "ArrowLeft") move(-step, 0);
@@ -91,150 +102,199 @@ export function ZoneEditor({ points, onChange, invalid, disabled, backgroundUrl,
     }
   }
 
-  const px = (p: Point) => `${p.x * W},${p.y * H}`;
+  const px = (p: VisionPoint) => `${p[0] * W},${p[1] * H}`;
   const stroke = invalid ? "hsl(var(--destructive))" : "hsl(var(--primary))";
+
+  // Arrow calculations for counting line
+  let arrowStart: [number, number] | null = null;
+  let arrowEnd: [number, number] | null = null;
+  if (isLine && points.length === 2) {
+    const [pA, pB] = points;
+    const midX = ((pA[0] + pB[0]) / 2) * W;
+    const midY = ((pA[1] + pB[1]) / 2) * H;
+    const dx = (pB[0] - pA[0]) * W;
+    const dy = (pB[1] - pA[1]) * H;
+    const len = Math.hypot(dx, dy) || 1;
+    // Perpendicular vector (-dy, dx)
+    const perpX = (-dy / len) * 70;
+    const perpY = (dx / len) * 70;
+
+    if (countDirection === "A_TO_B") {
+      arrowStart = [midX - perpX, midY - perpY];
+      arrowEnd = [midX + perpX, midY + perpY];
+    } else if (countDirection === "B_TO_A") {
+      arrowStart = [midX + perpX, midY + perpY];
+      arrowEnd = [midX - perpX, midY - perpY];
+    }
+  }
 
   return (
     <div className="space-y-3">
       <div
         className={cn(
-          "overflow-hidden rounded-xl border bg-slate-900 shadow-card",
+          "overflow-hidden rounded-xl border bg-slate-950 shadow-card",
           invalid && "border-destructive"
         )}
       >
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
-          data-aspect={aspect.toFixed(3)}
           className={cn("block w-full touch-none select-none", disabled ? "opacity-70" : "cursor-crosshair")}
           onPointerMove={onMove}
           onPointerUp={() => (dragging.current = null)}
           onPointerCancel={() => (dragging.current = null)}
-          role="group"
-          aria-label="Shutter zone editor. Click to add points."
         >
-          {/* neutral stand-in for the camera picture */}
-          <rect width={W} height={H} fill="#0f172a" onPointerDown={addPoint} />
+          <defs>
+            <marker
+              id="dir-arrow"
+              viewBox="0 0 10 10"
+              refX="6"
+              refY="5"
+              markerWidth="8"
+              markerHeight="8"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+            </marker>
+          </defs>
+
+          <rect width={W} height={H} fill="#090d16" onPointerDown={addPoint} />
+
           {backgroundUrl && (
             <image
               href={backgroundUrl}
               width={W}
               height={H}
               preserveAspectRatio="none"
-              opacity={0.85}
+              opacity={0.8}
               pointerEvents="none"
             />
           )}
+
+          {/* Grid lines */}
           {[1, 2].map((i) => (
-            <g key={i} stroke="#334155" strokeWidth={2} strokeDasharray="10 10" pointerEvents="none">
+            <g key={i} stroke="#1e293b" strokeWidth={2} strokeDasharray="8 8" pointerEvents="none">
               <line x1={(W / 3) * i} y1={0} x2={(W / 3) * i} y2={H} />
               <line x1={0} y1={(H / 3) * i} x2={W} y2={(H / 3) * i} />
             </g>
           ))}
-          {!backgroundUrl && (
-            <>
-              <text x={24} y={44} fill="#64748b" fontSize={34} pointerEvents="none">
-                Top of the camera picture
-              </text>
-              <text x={24} y={H - 24} fill="#64748b" fontSize={34} pointerEvents="none">
-                Bottom
-              </text>
-            </>
-          )}
 
-          {points.length >= 3 && (
+          {/* Polygon representation */}
+          {!isLine && points.length >= 3 && (
             <polygon
               points={points.map(px).join(" ")}
-              fill={invalid ? "hsl(var(--destructive) / 0.25)" : "hsl(var(--primary) / 0.3)"}
+              fill={invalid ? "hsl(var(--destructive) / 0.25)" : "hsl(var(--primary) / 0.25)"}
               stroke={stroke}
               strokeWidth={5}
               strokeLinejoin="round"
               pointerEvents="none"
             />
           )}
-          {points.length === 2 && (
+
+          {/* Line representation */}
+          {points.length >= 2 && (
             <polyline
-              points={points.map(px).join(" ")}
+              points={points.slice(0, 2).map(px).join(" ")}
               fill="none"
-              stroke={stroke}
-              strokeWidth={5}
+              stroke={isLine ? "#38bdf8" : stroke}
+              strokeWidth={6}
+              strokeDasharray={isLine ? "12 6" : undefined}
               pointerEvents="none"
             />
           )}
 
-          {points.map((p, i) => (
-            <g
-              key={i}
-              tabIndex={disabled ? -1 : 0}
-              role="button"
-              aria-label={`Point ${i + 1} of ${points.length}. Arrow keys move it, Delete removes it.`}
-              onPointerDown={(e) => startDrag(e, i)}
-              onKeyDown={(e) => onKey(e, i)}
-              onFocus={() => setSelected(i)}
-              className="cursor-grab outline-none"
-              style={{ touchAction: "none" }}
-            >
-              <circle cx={p.x * W} cy={p.y * H} r={80} fill="transparent" />
-              <circle
-                cx={p.x * W}
-                cy={p.y * H}
-                r={selected === i ? 30 : 24}
-                fill="white"
-                stroke={stroke}
-                strokeWidth={7}
+          {/* Line crossing direction arrow */}
+          {arrowStart && arrowEnd && (
+            <g pointerEvents="none">
+              <line
+                x1={arrowStart[0]}
+                y1={arrowStart[1]}
+                x2={arrowEnd[0]}
+                y2={arrowEnd[1]}
+                stroke="#38bdf8"
+                strokeWidth={5}
+                markerEnd="url(#dir-arrow)"
               />
               <text
-                x={p.x * W}
-                y={p.y * H + 10}
-                textAnchor="middle"
-                fontSize={30}
+                x={arrowEnd[0] + 15}
+                y={arrowEnd[1] + 10}
+                fill="#38bdf8"
+                fontSize={32}
                 fontWeight={700}
-                fill="#0f172a"
-                pointerEvents="none"
               >
-                {i + 1}
+                COUNT DIRECTION
               </text>
             </g>
-          ))}
+          )}
+
+          {/* Draggable point vertices */}
+          {points.map((p, i) => {
+            const label = isLine ? (i === 0 ? "A" : "B") : String(i + 1);
+            return (
+              <g
+                key={i}
+                tabIndex={disabled ? -1 : 0}
+                role="button"
+                aria-label={`Point ${label}`}
+                onPointerDown={(e) => startDrag(e, i)}
+                onKeyDown={(e) => onKey(e, i)}
+                onFocus={() => setSelected(i)}
+                className="cursor-grab outline-none"
+                style={{ touchAction: "none" }}
+              >
+                <circle cx={p[0] * W} cy={p[1] * H} r={80} fill="transparent" />
+                <circle
+                  cx={p[0] * W}
+                  cy={p[1] * H}
+                  r={selected === i ? 28 : 22}
+                  fill="#ffffff"
+                  stroke={stroke}
+                  strokeWidth={6}
+                />
+                <text
+                  x={p[0] * W}
+                  y={p[1] * H + 9}
+                  textAnchor="middle"
+                  fontSize={26}
+                  fontWeight={800}
+                  fill="#090d16"
+                  pointerEvents="none"
+                >
+                  {label}
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">Quick start:</span>
-        {ZONE_PRESETS.map((preset) => (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
           <Button
-            key={preset.id}
-            variant="outline"
+            variant="ghost"
             size="sm"
-            disabled={disabled}
+            disabled={disabled || points.length === 0}
+            onClick={() => commit(latest.current.slice(0, -1))}
+          >
+            <Undo2 className="mr-1 h-4 w-4" /> Undo point
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={disabled || points.length === 0}
             onClick={() => {
-              commit(preset.points.map((p) => ({ ...p })));
+              commit([]);
               setSelected(null);
             }}
           >
-            {preset.label}
+            <Eraser className="mr-1 h-4 w-4" /> Clear
           </Button>
-        ))}
-        <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled || points.length === 0}
-          onClick={() => commit(latest.current.slice(0, -1))}
-        >
-          <Undo2 aria-hidden /> Undo last point
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled || points.length === 0}
-          onClick={() => {
-            commit([]);
-            setSelected(null);
-          }}
-        >
-          <Eraser aria-hidden /> Clear
-        </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {isLine
+            ? "Click 2 points (A and B) across the transit corridor to create a counting line."
+            : "Click at least 3 points to define the zone boundary. Drag points to adjust."}
+        </p>
       </div>
     </div>
   );

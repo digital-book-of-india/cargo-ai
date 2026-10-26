@@ -1,293 +1,481 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ImagePlus, Save, X } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CheckSquare,
+  Clock,
+  Eye,
+  Play,
+  Plus,
+  ShieldCheck,
+  Square,
+  XCircle,
+} from "lucide-react";
 import { ZoneEditor } from "@/components/camera/ZoneEditor";
 import { CameraStatusBadge } from "@/components/common/StatusBadges";
 import { PageHeader } from "@/components/common/PageHeader";
-import { Alert, ApiErrorState, EmptyState, LoadingState } from "@/components/common/States";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, SelectField, Switch } from "@/components/ui";
-import { useAsync } from "@/hooks/useAsync";
-import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
-import { camerasApi } from "@/lib/api/cameras";
-import { friendlyMessage } from "@/lib/api/messages";
+import { ApiErrorState, EmptyState, LoadingState } from "@/components/common/States";
 import {
-  canvasAspect,
-  checkGuideImage,
-  polygonArea,
-  toZonePayload,
-  validateZonePoints,
-} from "@/lib/zone";
-import { getStoredZone, markZoneSaved, setStoredZone } from "@/lib/utils/storage";
-import type { Camera, Point, Zone } from "@/types";
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  SelectField,
+} from "@/components/ui";
+import { useAsync } from "@/hooks/useAsync";
+import { camerasApi } from "@/lib/api/cameras";
+import { visionApi } from "@/lib/api/vision";
+import { friendlyMessage } from "@/lib/api/messages";
+import type {
+  Camera,
+  VisionCountDirection,
+  VisionGeometry,
+  VisionObjectClass,
+  VisionPoint,
+  VisionZone,
+  VisionZoneRules,
+  VisionZoneType,
+} from "@dbi/api-types";
 
-const ZONE_TYPES: Array<{ value: Zone["zoneType"]; label: string }> = [
-  { value: "SHUTTER", label: "Shutter" },
-  { value: "GATE", label: "Gate" },
-  { value: "ENTRANCE", label: "Entrance" },
-  { value: "CUSTOM", label: "Custom area" },
+const ZONE_TYPES: Array<{ value: VisionZoneType; label: string }> = [
+  { value: "counting_line", label: "Counting Line (Transit counter)" },
+  { value: "loading_bay", label: "Loading / Unloading Bay" },
+  { value: "restricted", label: "Restricted Security Zone" },
+  { value: "storage", label: "Storage Area" },
+  { value: "polygon", label: "General Polygon Area" },
 ];
 
-const SENSITIVITY: Array<{ value: Zone["sensitivity"]; label: string }> = [
-  { value: "LOW", label: "Low: fewer alerts" },
-  { value: "MEDIUM", label: "Medium: balanced" },
-  { value: "HIGH", label: "High: more alerts" },
-];
+const ALL_CLASSES: VisionObjectClass[] = ["package", "box", "pallet"];
 
-export default function ZonePage() {
+export default function CargoZonePage() {
   const { shopId, cameraId } = useParams<{ shopId: string; cameraId: string }>();
-  const { data, error, loading, reload } = useAsync<Camera | null>(async () => {
+
+  const cameraQuery = useAsync<Camera | null>(async () => {
     const { cameras } = await camerasApi.list(shopId);
     return cameras.find((c) => c.id === cameraId) ?? null;
   }, [shopId, cameraId]);
 
-  const savedZone = useAsync<Zone | null>(() => camerasApi.getZone(cameraId), [cameraId]);
+  const [zones, setZones] = useState<VisionZone[]>([]);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
-  const [points, setPoints] = useState<Point[]>([]);
-  const [zoneType, setZoneType] = useState<Zone["zoneType"]>("SHUTTER");
-  const [sensitivity, setSensitivity] = useState<Zone["sensitivity"]>("MEDIUM");
-  const [enabled, setEnabled] = useState(true);
-  const [fromStorage, setFromStorage] = useState(false);
-  const [initial, setInitial] = useState(
-    JSON.stringify({ points: [], zoneType: "SHUTTER", sensitivity: "MEDIUM", enabled: true })
-  );
+  // Form State
+  const [name, setName] = useState("Loading Bay Line 1");
+  const [zoneType, setZoneType] = useState<VisionZoneType>("counting_line");
+  const [points, setPoints] = useState<VisionPoint[]>([]);
+  const [classes, setClasses] = useState<VisionObjectClass[]>(["package", "box"]);
+  const [confidence, setConfidence] = useState(0.55);
+  const [direction, setDirection] = useState<VisionCountDirection>("A_TO_B");
+  const [countOnce, setCountOnce] = useState(true);
+  const [afterHoursEnabled, setAfterHoursEnabled] = useState(false);
+  const [afterHoursStart, setAfterHoursStart] = useState("22:00");
+  const [afterHoursEnd, setAfterHoursEnd] = useState("06:00");
+
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [enabling, setEnabling] = useState(false);
 
-  // Optional guide picture. It stays in this browser (object URL) and is never uploaded.
-  const [guideUrl, setGuideUrl] = useState<string | undefined>(undefined);
-  const [guideAspect, setGuideAspect] = useState(16 / 9);
-  const [guideError, setGuideError] = useState<string | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
+  async function refreshZones() {
+    try {
+      const res = await visionApi.listZones(shopId, cameraId);
+      setZones(res.items);
+      if (res.items.length > 0 && !selectedZoneId) {
+        selectZone(res.items[0]);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
   useEffect(() => {
-    return () => {
-      if (guideUrl) URL.revokeObjectURL(guideUrl);
-    };
-  }, [guideUrl]);
+    refreshZones();
+  }, [shopId, cameraId]);
 
-  function onPickGuide(file: File | undefined) {
-    if (!file) return;
-    const problem = checkGuideImage(file);
-    if (problem) {
-      setGuideError(problem);
-      return;
+  function selectZone(z: VisionZone) {
+    setSelectedZoneId(z.id);
+    setName(z.name);
+    setZoneType(z.zoneType);
+    setClasses(z.rules.objectClasses);
+    setConfidence(z.rules.minimumConfidence);
+    setDirection(z.rules.countDirection ?? "A_TO_B");
+    setCountOnce(z.rules.countOncePerTrackPerRule ?? true);
+    setAfterHoursEnabled(z.rules.afterHours?.enabled ?? false);
+    setAfterHoursStart(z.rules.afterHours?.start ?? "22:00");
+    setAfterHoursEnd(z.rules.afterHours?.end ?? "06:00");
+
+    if ("line" in z.geometry) {
+      setPoints([z.geometry.line[0], z.geometry.line[1]]);
+    } else if ("polygon" in z.geometry) {
+      setPoints(z.geometry.polygon);
     }
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      setGuideAspect(canvasAspect(img.naturalWidth, img.naturalHeight));
-      setGuideUrl(url);
-      setGuideError(null);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      setGuideError("This file could not be read as a picture.");
-    };
-    img.src = url;
   }
 
-  function clearGuide() {
-    setGuideUrl(undefined);
-    setGuideAspect(16 / 9);
-    if (fileInput.current) fileInput.current.value = "";
+  function startNewZone() {
+    setSelectedZoneId(null);
+    setName("New Counting Line");
+    setZoneType("counting_line");
+    setPoints([
+      [0.15, 0.6],
+      [0.9, 0.6],
+    ]);
+    setClasses(["package", "box"]);
+    setConfidence(0.55);
+    setDirection("A_TO_B");
+    setCountOnce(true);
+    setAfterHoursEnabled(false);
+    setAfterHoursStart("22:00");
+    setAfterHoursEnd("06:00");
   }
 
-  // Prefill with the zone saved on the server. Only if that read fails for another reason than
-  // "no zone yet", the last zone saved from this browser is used instead (and says so).
-  useEffect(() => {
-    if (savedZone.loading) return;
-    const zone: { polygon: Point[]; zoneType: string; sensitivity: string; enabled: boolean } | null =
-      savedZone.data ?? (savedZone.error ? getStoredZone(cameraId) : null);
-    if (!zone) return;
-    setPoints(zone.polygon);
-    setZoneType(zone.zoneType as Zone["zoneType"]);
-    setSensitivity(zone.sensitivity as Zone["sensitivity"]);
-    setEnabled(zone.enabled);
-    setFromStorage(true);
-    setInitial(
-      JSON.stringify({
-        points: zone.polygon,
-        zoneType: zone.zoneType,
-        sensitivity: zone.sensitivity,
-        enabled: zone.enabled,
-      })
-    );
-    if (savedZone.data) markZoneSaved(cameraId);
-  }, [cameraId, savedZone.loading, savedZone.data, savedZone.error]);
-
-  const problem = useMemo(() => (points.length === 0 ? null : validateZonePoints(points)), [points]);
-  const dirty = JSON.stringify({ points, zoneType, sensitivity, enabled }) !== initial;
-  const coverage = points.length >= 3 ? Math.round(polygonArea(points) * 100) : 0;
-  const leaveDialog = useUnsavedChangesGuard(dirty);
-
-  if ((loading && !data) || savedZone.loading) return <LoadingState label="Loading camera..." />;
-  if (error) return <ApiErrorState error={error} onRetry={reload} />;
-  if (!data) {
-    return (
-      <EmptyState
-        title="Camera not found"
-        hint="It may have been removed."
-        action={
-          <Button asChild variant="outline">
-            <Link href={`/shops/${shopId}/cameras`}>Back to cameras</Link>
-          </Button>
-        }
-      />
-    );
-  }
-  const camera = data;
-
-  async function save() {
-    setSaveError(null);
-    const message = validateZonePoints(points);
-    if (message) {
-      setSaveError(message);
-      return;
-    }
+  async function handleSave() {
     setSaving(true);
     try {
-      const payload = toZonePayload(points, { zoneType, sensitivity, enabled });
-      await camerasApi.saveZone(cameraId, payload);
-      markZoneSaved(cameraId);
-      setStoredZone(cameraId, payload);
-      setInitial(JSON.stringify({ points, zoneType, sensitivity, enabled }));
-      setFromStorage(true);
-      setSaved(true);
-      toast.success("Shutter zone saved");
+      const geometry: VisionGeometry =
+        zoneType === "counting_line"
+          ? {
+              coordinateSpace: "normalized_0_1",
+              line: [points[0] || [0.1, 0.5], points[1] || [0.9, 0.5]],
+            }
+          : {
+              coordinateSpace: "normalized_0_1",
+              polygon: points,
+            };
+
+      const rules: VisionZoneRules = {
+        objectClasses: classes,
+        minimumConfidence: confidence,
+        countDirection: zoneType === "counting_line" ? direction : undefined,
+        countOncePerTrackPerRule: countOnce,
+        afterHours: {
+          enabled: afterHoursEnabled,
+          start: afterHoursStart,
+          end: afterHoursEnd,
+        },
+      };
+
+      if (selectedZoneId) {
+        await visionApi.updateZone(selectedZoneId, { name, zoneType, geometry, rules });
+        toast.success("Zone configuration updated (Draft)");
+      } else {
+        const res = await visionApi.createZone({
+          siteId: shopId,
+          cameraId,
+          name,
+          zoneType,
+          geometry,
+          rules,
+        });
+        setSelectedZoneId(res.zone.id);
+        toast.success("Zone created successfully");
+      }
+      await refreshZones();
     } catch (err) {
-      setSaveError(friendlyMessage(err));
+      toast.error(friendlyMessage(err));
     } finally {
       setSaving(false);
     }
   }
 
+  async function handleValidate() {
+    if (!selectedZoneId) return;
+    setValidating(true);
+    try {
+      const res = await visionApi.validateZone(selectedZoneId);
+      if (res.passed) {
+        toast.success("Zone passed geometric and camera validation!");
+      } else {
+        toast.error(`Validation issues: ${res.zone.validationIssues?.join(", ")}`);
+      }
+      await refreshZones();
+    } catch (err) {
+      toast.error(friendlyMessage(err));
+    } finally {
+      setValidating(false);
+    }
+  }
+
+  async function handleEnable() {
+    if (!selectedZoneId) return;
+    setEnabling(true);
+    try {
+      await visionApi.enableZone(selectedZoneId);
+      await visionApi.startMonitoring(cameraId);
+      toast.success("Zone enabled & Camera AI monitoring started!");
+      await refreshZones();
+    } catch (err) {
+      toast.error(friendlyMessage(err));
+    } finally {
+      setEnabling(false);
+    }
+  }
+
+  const selectedZone = zones.find((z) => z.id === selectedZoneId);
+
+  if (cameraQuery.loading && !cameraQuery.data) return <LoadingState label="Loading camera..." />;
+  if (cameraQuery.error) return <ApiErrorState error={cameraQuery.error} onRetry={cameraQuery.reload} />;
+  if (!cameraQuery.data) return <EmptyState title="Camera not found" />;
+
+  const camera = cameraQuery.data;
+
   return (
-    <div className="animate-fade-up space-y-6">
-      {leaveDialog}
-      <Button asChild variant="ghost" size="sm" className="-ml-2">
-        <Link href={`/shops/${shopId}/cameras`}>
-          <ArrowLeft aria-hidden /> Cameras
-        </Link>
-      </Button>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <Button asChild variant="ghost" size="sm" className="-ml-2">
+          <Link href={`/shops/${shopId}/cameras`}>
+            <ArrowLeft className="mr-1 h-4 w-4" /> Back to Cameras
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/shops/${shopId}/cameras/${cameraId}/live`}>
+            <Eye className="mr-1 h-4 w-4" /> Open Live Monitoring HUD
+          </Link>
+        </Button>
+      </div>
 
       <PageHeader
-        title="Shutter zone"
-        description={`Outline the area of ${camera.name} that should be watched.`}
+        title={`Cargo Vision Zones: ${camera.name}`}
+        description="Configure virtual lines and boundary polygons for automated package counting and cargo security."
         actions={<CameraStatusBadge status={camera.status} />}
       />
 
-      {camera.status !== "ONLINE" && (
-        <Alert tone="warning">
-          This camera is not online yet, so monitoring will not work even after you save a zone. Test the
-          connection first.
-        </Alert>
-      )}
-      {saveError && saveError !== problem && <Alert tone="danger">{saveError}</Alert>}
-      {saved && !dirty && (
-        <Alert tone="success">
-          Zone saved. <Link href="/dashboard" className="font-medium underline">
-            Back to dashboard
-          </Link>
-        </Alert>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <div className="space-y-3">
-          <ZoneEditor
-            points={points}
-            onChange={setPoints}
-            invalid={!!problem}
-            disabled={saving}
-            backgroundUrl={guideUrl}
-            aspect={guideAspect}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              aria-label="Choose a guide picture"
-              onChange={(e) => onPickGuide(e.target.files?.[0])}
-            />
-            <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
-              <ImagePlus aria-hidden /> {guideUrl ? "Change guide picture" : "Use a picture as a guide"}
+      {/* Existing Zones List Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {zones.map((z) => (
+            <Button
+              key={z.id}
+              variant={selectedZoneId === z.id ? "primary" : "outline"}
+              size="sm"
+              onClick={() => selectZone(z)}
+            >
+              {z.name}
+              <span
+                className={`ml-2 inline-block h-2 w-2 rounded-full ${
+                  z.status === "active" ? "bg-green-400" : "bg-amber-400"
+                }`}
+              />
             </Button>
-            {guideUrl && (
-              <Button variant="ghost" size="sm" onClick={clearGuide}>
-                <X aria-hidden /> Remove picture
-              </Button>
-            )}
-            <span className="text-xs text-muted-foreground">
-              Optional. Use a full screenshot of your camera view. It stays in your browser and is not uploaded.
-            </span>
-          </div>
-          {guideError && (
-            <p role="alert" className="text-sm font-medium text-destructive">
-              {guideError}
-            </p>
+          ))}
+          <Button variant="ghost" size="sm" onClick={startNewZone}>
+            <Plus className="mr-1 h-4 w-4" /> New Zone
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
+        {/* Left: Canvas Editor */}
+        <div className="space-y-4">
+          <ZoneEditor
+            zoneType={zoneType}
+            points={points}
+            countDirection={direction}
+            onChange={setPoints}
+            disabled={saving}
+            backgroundUrl={`/api/v1/cameras/${cameraId}/preview`}
+          />
+
+          {selectedZone && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-4">
+              <div className="flex-1 text-sm">
+                <span className="font-semibold">Validation: </span>
+                {selectedZone.validationStatus === "valid" ? (
+                  <span className="text-green-500 font-medium inline-flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4" /> Valid
+                  </span>
+                ) : (
+                  <span className="text-amber-500 font-medium inline-flex items-center gap-1">
+                    <XCircle className="h-4 w-4" /> {selectedZone.validationStatus}
+                  </span>
+                )}
+                <span className="ml-4 font-semibold">Monitoring: </span>
+                <span className={selectedZone.status === "active" ? "text-green-500 font-medium" : "text-muted-foreground"}>
+                  {selectedZone.status.toUpperCase()}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  loading={validating}
+                  onClick={handleValidate}
+                >
+                  <ShieldCheck className="mr-1 h-4 w-4" /> Validate
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={enabling}
+                  disabled={selectedZone.validationStatus !== "valid"}
+                  onClick={handleEnable}
+                >
+                  <Play className="mr-1 h-4 w-4" /> Enable
+                </Button>
+              </div>
+            </div>
           )}
-          {problem ? (
-            <p role="alert" className="text-sm font-medium text-destructive">
-              {problem}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {points.length === 0
-                ? "Click on the picture to place points around the shutter or gate, or pick a quick start."
-                : `${points.length} point${points.length === 1 ? "" : "s"} placed${
-                    coverage ? `, covering about ${coverage}% of the picture` : ""
-                  }. Drag a point to adjust it.`}
-            </p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            {guideUrl
-              ? "The outline is saved as a position inside the camera frame, so it lines up when your picture is the full camera view."
-              : "A live preview from your camera is not available yet, so the area is a plain stand-in. Add a screenshot as a guide if you have one."}
-            {fromStorage &&
-              (!savedZone.error
-                ? " Showing the zone saved for this camera."
-                : " The saved zone could not be read from the server, so this is the last zone saved from this browser.")}
-          </p>
         </div>
 
+        {/* Right: Form Settings */}
         <Card className="h-fit">
           <CardHeader>
-            <CardTitle>Zone settings</CardTitle>
-            <CardDescription>How this area is watched.</CardDescription>
+            <CardTitle>{selectedZoneId ? "Edit Zone & Rules" : "Create Zone"}</CardTitle>
+            <CardDescription>Configure counting, classes, confidence, and after-hours schedule.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 text-sm">
+            <div>
+              <label className="font-medium block mb-1">Zone Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
             <SelectField
-              label="Area type"
+              label="Zone Purpose"
               value={zoneType}
-              onValueChange={(v) => setZoneType(v as Zone["zoneType"])}
+              onValueChange={(v) => {
+                const nextType = v as VisionZoneType;
+                setZoneType(nextType);
+                if (nextType === "counting_line" && points.length > 2) {
+                  setPoints([points[0], points[1]]);
+                }
+              }}
               options={ZONE_TYPES}
-              disabled={saving}
             />
-            <SelectField
-              label="Sensitivity"
-              hint="Higher sensitivity can create more false alarms."
-              value={sensitivity}
-              onValueChange={(v) => setSensitivity(v as Zone["sensitivity"])}
-              options={SENSITIVITY}
-              disabled={saving}
-            />
-            <label className="flex items-center justify-between gap-3 text-sm font-medium">
-              Watch this zone
-              <Switch checked={enabled} onCheckedChange={setEnabled} disabled={saving} aria-label="Watch this zone" />
-            </label>
+
+            {zoneType === "counting_line" && (
+              <SelectField
+                label="Counting Direction"
+                value={direction}
+                onValueChange={(v) => setDirection(v as VisionCountDirection)}
+                options={[
+                  { value: "A_TO_B", label: "A to B (Outbound / OUT)" },
+                  { value: "B_TO_A", label: "B to A (Inbound / IN)" },
+                  { value: "EITHER", label: "Both directions" },
+                ]}
+              />
+            )}
+
+            <div>
+              <label className="font-medium block mb-2">Target Object Classes</label>
+              <div className="flex flex-col gap-2">
+                {ALL_CLASSES.map((cls) => {
+                  const checked = classes.includes(cls);
+                  return (
+                    <button
+                      key={cls}
+                      type="button"
+                      className="flex items-center gap-2 text-left"
+                      onClick={() => {
+                        if (checked) {
+                          if (classes.length > 1) setClasses(classes.filter((c) => c !== cls));
+                        } else {
+                          setClasses([...classes, cls]);
+                        }
+                      }}
+                    >
+                      {checked ? (
+                        <CheckSquare className="h-4 w-4 text-primary" />
+                      ) : (
+                        <Square className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <span className="capitalize">{cls}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between font-medium mb-1">
+                <span>Minimum Confidence</span>
+                <span>{Math.round(confidence * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0.30"
+                max="0.95"
+                step="0.05"
+                value={confidence}
+                onChange={(e) => setConfidence(parseFloat(e.target.value))}
+                className="w-full accent-primary cursor-pointer"
+              />
+            </div>
+
+            {/* Count-Once Rule */}
+            <div className="pt-2 border-t border-border">
+              <button
+                type="button"
+                className="flex items-center gap-2 text-left font-medium"
+                onClick={() => setCountOnce(!countOnce)}
+              >
+                {countOnce ? (
+                  <CheckSquare className="h-4 w-4 text-primary" />
+                ) : (
+                  <Square className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span>Count once per track per rule (QA-04)</span>
+              </button>
+              <p className="text-xs text-muted-foreground mt-1 pl-6">
+                Prevents duplicate counts if an object jitters on the line.
+              </p>
+            </div>
+
+            {/* After-Hours Schedule Window */}
+            <div className="pt-2 border-t border-border space-y-3">
+              <button
+                type="button"
+                className="flex items-center gap-2 text-left font-medium"
+                onClick={() => setAfterHoursEnabled(!afterHoursEnabled)}
+              >
+                {afterHoursEnabled ? (
+                  <CheckSquare className="h-4 w-4 text-primary" />
+                ) : (
+                  <Square className="h-4 w-4 text-muted-foreground" />
+                )}
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>After-Hours Alert Window</span>
+              </button>
+
+              {afterHoursEnabled && (
+                <div className="grid grid-cols-2 gap-3 pl-6">
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Start (HH:mm)</label>
+                    <input
+                      type="time"
+                      value={afterHoursStart}
+                      onChange={(e) => setAfterHoursStart(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">End (HH:mm)</label>
+                    <input
+                      type="time"
+                      value={afterHoursEnd}
+                      onChange={(e) => setAfterHoursEnd(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <Button
-              className="w-full"
+              className="w-full mt-4"
               loading={saving}
-              disabled={points.length === 0 || (!dirty && fromStorage)}
-              onClick={() => void save()}
+              disabled={points.length === 0}
+              onClick={handleSave}
             >
-              <Save aria-hidden /> Save zone
+              {selectedZoneId ? "Save Zone (Reset to Draft)" : "Create Zone"}
             </Button>
           </CardContent>
         </Card>
