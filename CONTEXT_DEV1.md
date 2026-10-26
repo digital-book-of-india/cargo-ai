@@ -1,7 +1,7 @@
 # Dev 1 Context and Work Log (Platform, Workflow & Admin)
 
 > Single source of truth for Dev 1. **Update this file at the end of every task.**
-> Last updated: 2026-10-26
+> Last updated: 2026-10-26 (P1, P2 and P3 code complete and verified, not committed)
 
 ## 1. Project in one paragraph
 
@@ -18,6 +18,10 @@ Requirements v1.0" (25 Oct 2026).
 - Push flow: `git add <your files>` -> `git commit` -> `git pull origin feature/development --rebase` -> `git push origin feature/development`.
 - Small commits, one task per commit, typecheck and tests green before every push.
 - Edit only your own areas (section 5). Shared packages change by agreement (see "Shared packages").
+- **Do not stage, commit or push without asking the repo owner first.** Do not use `git add`, `git rm`, `git mv`,
+  `git commit` or `git push` on your own initiative.
+- **No mock data.** Every screen and test reads the real backend and database. Seed rows are real database records
+  marked DEMO; tests use a separate throw-away database (`cargo_ai_test`), never `cargo_ai`.
 - Never commit secrets. `.env` files are gitignored; use the `.env.example` templates.
 - All seed/mock data must be marked DEMO.
 - Never show live protection when a camera or the AI worker is offline.
@@ -89,7 +93,7 @@ and the owner panel's zone editor, live monitoring and dashboard.
 
 1. Which package classes can be detected, and is annotated footage available? (Dev 2's critical path)
 2. Live view: stream relay (MediaMTX/go2rtc) or snapshots only for the MVP?
-3. How is the observed count derived for inbound vs outbound sessions (OUT only, or OUT minus IN)?
+3. How is the observed count derived for inbound vs outbound sessions (OUT only, or OUT minus IN)? **Decided: each direction is counted separately and never subtracted.** An outbound session's observed count is the OUT crossings, an inbound session's is the IN crossings; the other direction is stored in the session's `countsBreakdown` for the reviewer. Only `observedForSession` in `services/counts/observed.ts` decides this.
 4. Mismatch tolerance and where it is configured (company setting vs per session).
 5. Evidence and event retention period, and who may view/export clips.
 6. Manifest source: manual only, CSV, or WMS/TMS?
@@ -196,92 +200,129 @@ idempotency, loading/empty/error/permission states, DEMO labels, secret handling
 Legend: [x] done and pushed, [~] started, not pushed or not compiling, [ ] not started.
 Effort figures are rough estimates in person-days.
 
-### 8.1 Foundation backend (8 d)
-- [~] Shared types and validation for company, site, membership, invitation (written, uncommitted)
-- [~] Models: Company, CompanyMember, Invitation, Site; company/site fields on Camera, Zone, Event, Notification, AuditLog (written, uncommitted)
-- [~] Permission rules (`services/authz/permissions.ts`) with 11 unit tests passing (uncommitted)
-- [~] Tenant middleware: `resolveTenant`, `guard`, `requireSiteAccess`, `requireCameraAccess` (uncommitted)
-- [~] Auth routes: register creates company + owner membership, login/me return memberships, accept-invitation (uncommitted)
-- [~] `GET/PATCH /company`, sites CRUD with archive (uncommitted)
-- [ ] `GET /me` (spec path), `GET /cameras` (company-wide, permitted sites)
-- [ ] Users: `GET /users`, `POST /users/invitations`, `PATCH /users/:id/role`, member status, last-owner rule
-- [ ] `POST /cameras/:id/assign-site`; camera registration scoped to a site and company
-- [ ] Migrate events, notifications, evidence, internal AI routes, superadmin routes to company/site
-- [ ] Wire everything in `app.ts`; delete the old `modules/owner/shops`
-- [ ] New seed: demo company with all six roles, site, camera, zone (DEMO)
-- [ ] Tenant-isolation tests (QA-01, QA-02) against a test database
+### 8.1 Foundation backend (8 d)  [done in P1, uncommitted]
+- [x] Shared types and validation for company, site, membership, invitation
+- [x] Models: Company, CompanyMember, Invitation, Site; company/site fields on Camera, Zone, Event, Notification, AuditLog
+- [x] Permission rules (`services/authz/permissions.ts`) with 11 unit tests
+- [x] Tenant middleware: `resolveTenant`, `guard`, `requireSiteAccess`, `requireCameraAccess`
+- [x] Auth: register creates company + owner membership, login/me return memberships, `accept-invitation`, `GET /me`
+- [x] `GET/PATCH /company`, sites CRUD with archive
+- [x] Users: `GET /users`, `POST /users/invitations`, `PATCH /users/:id/role`, `PATCH /users/:id/status`, last-owner rule
+- [x] `GET /cameras` (permitted sites), cameras registered under a site, `POST /cameras/:id/assign-site`
+- [x] Events, notifications, internal AI ingest/cameras, superadmin (companies, sites, overview, health, audit) moved to company/site
+- [x] `app.ts` wired; old shop routes deleted; `x-company-id` header allowed in CORS
+- [x] New seed: demo company with all six roles, two sites, camera, zone, events, plus a second company (DEMO rows; NOT run against Atlas yet)
+- [x] 34 integration tests on a throw-away database (`npm run test:int -w @dbi/backend`): QA-01, QA-02, site assignment,
+      invitations, last owner, disabled member, suspended company, camera secrecy, AI ingestion tenancy and idempotency
 
-### 8.2 Platform standards (4 d)
-- [ ] Versioned DB migrations with rollback
-- [ ] `{data, meta:{requestId}}` envelope; full error-code list (400, 401, 403, 404, 409, 413, 422, 429, 500, 503)
-- [ ] Request body size limit (413) and page-size caps everywhere
-- [ ] Rate limits: login, CSV import, report export
+### 8.2 Platform standards (4 d)  [done in P2, uncommitted]
+- [x] Versioned DB migrations with rollback: `npm run migrate | migrate:down | migrate:status` (index creation; archive of old-product collections as `legacy_*`, reversible)
+- [x] `{data, meta:{requestId}}` on every success response; error codes per Appendix B (400, 401, 403, 404, 409, 413, 422, 429, 500, 503); unknown routes return a JSON 404
+- [x] Request body limit (413) and page-size caps (events max 100, cursor paging; sites/cameras/users hard-capped)
+- [x] Rate limiters: login and accept-invitation (existing), camera test/assign-site, ingestion; import and export limiters exist and are applied when those endpoints are built (P5, P6)
+- [x] Production refuses to start without JWT, AI service and camera-secret keys; indexes are built by migrations, not on start
 
-### 8.3 Panels: site/company migration (6 d)
-- [ ] Owner: register with company, login with memberships, active company handling
-- [ ] Sites screen (list/create/edit/archive), Users & Roles screen (invite, role, site assignment, deactivate)
-- [ ] Cameras list with site assignment
-- [ ] Rename shop -> site across both panels and the mock layer
-- [ ] Permission-denied and offline states
+### 8.3 Panels: site/company migration (6 d)  [done in P3, uncommitted]
+- [x] Owner: register with company name; the session keeps the user's company role (`useAuth().can / canAtSite`), using the same permission rules as the API (they now live in `@dbi/api-types/permissions.ts`)
+- [x] Sites screen (`/sites`): list, show archived, add, deactivate / reactivate, archive (the API refuses while cameras or zones remain, and the message is shown)
+- [x] Users and roles screen (`/users`): people with role and sites, invite (role and site assignment, one-time link shown with a copy button), change role/sites, turn access off/on; roles offered are only the ones the signed-in person may grant
+- [x] Invitation acceptance page (`/accept-invitation?token=`): works for new people and for an existing account (password must match), also when someone else is signed in
+- [x] Cameras: controls shown only to roles that may use them, move a camera to another site, honest status (stale = not online; the test only proves the address was reachable, so no "sending video" claim)
+- [x] Site profile read-only for roles that cannot edit; zone editor and add-site screens show a permission-denied state instead of failing
+- [x] Navigation: Sites and Users and roles (only for roles that may read users)
+- [x] Wording: old shutter/shop text removed from the panel (the zone editor still uses the old zone types until the zone model is replaced by Dev 2)
+- [x] Mock layer removed earlier (no mock data anywhere)
 
-### 8.4 Event workflow backend (5 d)
-- [ ] Event model: 11 types, severity, status, summary, payload, eventKey
-- [ ] Transition map (open -> acknowledged -> in_review -> resolved; false_positive; escalated) validated server-side
-- [ ] History and notes collections; every transition audited
-- [ ] Endpoints: acknowledge, assign, notes, resolve (5 outcomes), false-positive, reopen (permissioned)
-- [ ] `GET /events` with filters and cursor; `GET /events/:id`
-- [ ] `createCargoEvent()` contract (section 4)
+### 8.4 Event workflow backend (5 d)  [done in P2, uncommitted]
+- [x] Event model `cargo_events`: 11 types, severity, summary, payload, unique (companyId, eventKey); history and notes collections
+- [x] Transition map (server side): open -> acknowledged -> in_review -> resolved; false_positive and escalated from the working states; reopen only for resolved and only with `events:reopen` (owner, admin, manager)
+- [x] Endpoints: list (filters status/type/severity/camera/site/from/to, cursor), detail with history and notes, acknowledge, assign, notes, resolve (5 outcomes), false-positive, reopen. Every change writes history and an audit entry; concurrent changes get 409
+- [x] `createCargoEvent()` (contract 2): derives the company from the site, checks camera/zone ownership, idempotent by eventKey (safe under concurrent retries), rejects payloads with credentials/tokens, notifies reviewers
+- [x] Ingestion stopgap: `POST /api/v1/ai/events` and `/internal/v1/ai/events` (service token, Appendix A schema, Idempotency-Key checked). The count ledger is the AI-pipeline work (Dev 2)
 
-### 8.5 Event inbox, notifications, accessibility (7 d)
-- [ ] Inbox UI: filters, evidence, notes, assignment, resolution
-- [ ] In-app notifications by role
-- [ ] Notification retry with backoff and dead-letter handling
-- [ ] Keyboard-usable review, clear severity labels
+### 8.5 Event inbox, notifications, accessibility (7 d)  [done in P4, uncommitted]
+- [x] Inbox UI: company-wide and per-site, filters (status, severity, type, assigned to me, date range), evidence, notes, assignment, resolution
+- [x] In-app notifications by role (only people who may review the event at that site), unread badge, mark read / mark all
+- [x] Notification retry with backoff and dead-letter handling (5 attempts, 1 min / 5 min / 30 min / 2 h, then FAILED)
+- [x] Keyboard-usable review, clear severity labels (checked in code and tests; no automated accessibility audit yet, see P7)
 
-### 8.6 Manifests and loading sessions (7 d)
-- [ ] Manifest CRUD, vehicle registry
-- [ ] CSV import with row-level errors, no partial corruption, idempotent (QA-10)
-- [ ] Sessions: create, list, get, close
-- [ ] Reconciliation via `getObservedCount`, tolerance setting, review-required `count_mismatch` event (QA-07)
-- [ ] Manifests and Sessions UI
+### 8.6 Manifests and loading sessions (7 d)  [done in P5, uncommitted]
+- [x] Manifest CRUD (create, list, get, update, cancel), vehicle registry
+- [x] CSV import with row-level errors, all-or-nothing by default (`allowPartial` opt-in), idempotent by file hash (QA-10)
+- [x] Sessions: create, list, get, close
+- [x] Reconciliation via `getObservedCount`, tolerance setting, review-required `count_mismatch` event, one per session (QA-07: 100 expected, 94 seen = -6, needs review)
+- [x] Shipments screen (Sessions, Manifests with CSV import, Vehicles)
 
-### 8.7 Reports and audit (5.5 d)
-- [ ] `reports/cargo-activity`, `reports/mismatches`, `reports/events/export` (audited CSV)
-- [ ] Filters: site, camera, zone, date, shift, event type; site timezone (QA-11)
-- [ ] Mark camera-offline coverage gaps (QA-06)
-- [ ] `GET /audit-logs` and the audit trail UI
+### 8.7 Reports and audit (5.5 d)  [done in P6, uncommitted]
+- [x] `reports/cargo-activity`, `reports/mismatches`, `reports/events/export` (audited CSV, 10,000 rows max, formulas neutralised, same site access as the event list)
+- [x] Filters: site, camera, zone, date, shift, event type; days and shifts in each site's own time zone (QA-11)
+- [x] Camera/AI outages marked as coverage gaps even when an event-type filter would hide them (QA-06)
+- [x] `GET /audit-logs` (owners, admins, auditors; company only) and the Audit trail screen; Reports screen
 
-### 8.8 Superadmin (3 d)
-- [ ] Companies list; suspend/activate with reason and audit
-- [ ] Sites overview and KPIs
-- [ ] Audited support access to evidence
+### 8.8 Superadmin (3 d)  [done in P1/P6, uncommitted]
+- [x] Companies list; suspend/activate with reason and audit (suspended members are locked out at once)
+- [x] Sites overview and KPIs
+- [x] Audited support access to evidence: `POST /admin/support/evidence-link` (reason of 10+ characters, 2-minute link, written to the owning company's audit trail). API only; no superadmin screen for it yet.
 
-### 8.9 Evidence storage and retention (5 d)
-- [ ] Private object storage (S3/GCS), signed expiring URLs, expired link denied (QA-09)
-- [ ] `saveEvidence()` / `signEvidenceUrl()` contract
-- [ ] Retention job (`CARGO_EVENT_RETENTION_DAYS`); audit of evidence access
+### 8.9 Evidence storage and retention (5 d)  [done in P2 with the local adapter, uncommitted]
+- [x] Private storage behind an interface (`services/evidence/storage.ts`); local-disk adapter that writes to `apps/backend/uploads` (created automatically if missing, gitignored; change with `EVIDENCE_STORAGE_DIR`); S3/GCS adapter still to add (needs credentials)
+- [x] Server-generated keys `company/site/yyyy/mm/uuid.ext`; upload endpoint `POST /internal/v1/evidence/upload` (service token) checks type, size and real file content; events may only reference keys that belong to their company and exist
+- [x] Signed, expiring links (`EVIDENCE_SIGNED_URL_TTL_SECONDS`, default 300) issued only on the event detail view, bound to event, file kind and company; expired/tampered/wrong links refused (QA-09); every access audited; storage keys are never sent to the browser
+- [x] `saveEvidence()` and `signEvidenceUrl()` (contract 4)
+- [x] Retention job `npm run job:retention`: deletes evidence files older than `CARGO_EVENT_RETENTION_DAYS`, keeps the event and history. Per-company retention comes with company settings (P3)
 
-### 8.10 Company settings (3 d)
-- [ ] CompanySettings model and Settings screen: mismatch tolerance, retention, default confidence, shifts, timezone, notification rules
+### 8.10 Company settings (3 d)  [done in P3, uncommitted]
+- [x] Model `company_settings` (one per company; unset fields fall back to platform defaults) and `getCompanySettings()` (contract 7: shifts)
+- [x] `GET /company/settings` (every member) and `PATCH /company/settings` (owner, admin; audited with before and after): mismatch tolerance, evidence retention days (7 to 3650), default confidence, shifts (named, may cross midnight, no overlaps, at most 8), notification rules (minimum severity, muted event types; camera/AI health notices can never be muted and ignore the minimum)
+- [x] The settings take effect: notification rules in `notifyReviewers`, retention days per company in the retention job
+- [x] Settings screen: company name and time zone, operating settings with shift editor and notification rules; read-only for roles that cannot change them
+- [ ] Mismatch tolerance is stored but only used by reconciliation in P5; shifts are only used by reports in P6
 
-### 8.11 Observability and delivery (6 d)
-- [ ] Structured logs, request IDs, metrics endpoint (API errors, event lag, queue depth)
-- [ ] CI (typecheck, tests, build), Dockerfiles, health checks
-- [ ] Backups and tested restore, rollback plan, production env documentation
+### 8.11 Observability and delivery (6 d)  [done in P7, uncommitted; Docker files not built]
+- [x] Structured JSON logs with request id (no query strings, bodies or tokens), `GET /internal/v1/metrics` (service token; requests, 5xx, event lag, notification queue depth, open sessions, db state), `/health` and `/health/ready`, graceful shutdown
+- [x] CI workflow (typecheck, unit + integration tests with MongoDB, builds, informational npm audit); Dockerfiles and `infra/docker-compose.prod.yml` written but NOT built (no Docker on the dev machine): first deploy must build them
+- [x] `npm run backup` / `npm run restore` (checksummed, refuses damaged backups and non-empty targets), round trip tested; rollback plan and production env documented (`docs/runbook.md`, `docs/production-env.md`)
+- [ ] A restore drill on the real environment and the S3/GCS evidence adapter (need infrastructure)
 
-### 8.12 Docs (3 d)
-- [ ] OpenAPI, README, QA checklist, security notes
-- [ ] Remove or rebuild the owner mock layer
+### 8.12 Docs (3 d)  [done in P7, uncommitted]
+- [x] OpenAPI (`docs/openapi.yaml`, kept in sync by a test), README, QA checklist, security notes with the review findings
+- [x] Mock layer removed from owner and superadmin (no mock data anywhere)
 
 ## 9. Current state (2026-10-26)
 
-- `feature/development` on GitHub holds 9 cleanup commits on top of the original code (connector app, browser push,
-  schedule/security-state stack, theft detector, old docs and notification preferences removed; README rewritten;
-  `apps/backend/.env.example` added). Typecheck and the 10 owner tests pass on that state.
-- `main` is still the original code. `cargo/cleanup` is a duplicate of `feature/development` and can be deleted.
-- Step 6 (foundation, section 8.1) is **partly written and uncommitted**; the backend does not compile until the
-  remaining routes and frontends are migrated. Commit it only when `npm run typecheck` is green.
-- Still the old model: shops/shutter zones, old event types and review statuses, owner mock layer, old panel wording.
+- `feature/development` on GitHub holds 9 cleanup commits (connector, browser push, schedule/security-state, theft
+  detector, old docs, notification preferences removed; README rewritten). `main` is still the original code.
+  `cargo/cleanup` is a duplicate of `feature/development` and can be deleted.
+- Local commits not pushed: `CONTEXT_DEV1.md` (2 commits).
+- **P1, P2 and P3 are code-complete but uncommitted** (nothing staged by choice of the repo owner; some `git rm`/`git mv`
+  side effects from early work may be staged, check `git status`). Verified for P3: typecheck (all apps), owner tests 10,
+  backend unit tests 35, backend integration tests 74, owner and superadmin `next build`, and a browser run of the new
+  screens (sites, users and roles, invitation acceptance, settings, role-limited controls).
+- The `cargo_ai` database was migrated and re-seeded after P2 (`npm run migrate`, `npm run seed`). P3 added the
+  `company_settings` collection, which is created on first save; run `npm run migrate` after pulling to be safe.
+- Evidence files are stored in `apps/backend/uploads` (created automatically, gitignored).
+- **P4 and P5 are code-complete but uncommitted.** Verified: typecheck (all apps), backend unit tests 52, backend
+  integration tests 110, owner tests 11, owner and superadmin `next build`, and an API run of the shipment flow against a
+  real server and database (`cargo_ai_test`, dropped afterwards). **The P4/P5 screens were NOT checked in a browser**
+  (the browser tool could not act on the page); do that before demo.
+- Migration 003 creates the P5 indexes (001 is already recorded on existing databases, so it would skip them).
+- P5 added collections `cargo_vehicles`, `cargo_manifests`, `cargo_import_jobs`, `cargo_loading_sessions`. Run
+  `npm run migrate` after pulling so their indexes exist (the one-open-session-per-manifest rule is an index).
+- Contract 3 (`services/counts/observed.ts`): until the counting service exists, the default reads the spec's
+  `cargo_count_ledger` collection (companyId, zoneId or siteId, occurredAt, direction IN/OUT, countDelta). If that
+  collection is missing, sessions close as `closed_unverified` and no number is invented. Dev 2: point
+  `setObservedCountProvider` at the real service if the ledger differs.
+- **P6 and P7 are code-complete but uncommitted.** Verified: typecheck (all apps), owner tests 12, backend unit tests 61,
+  backend integration tests 138, owner and superadmin `next build`, and the built backend (`node dist/server.js`, production
+  mode) run against a real database: JSON logs, `/health/ready`, metrics. The Reports, Audit trail and Shipments screens were
+  NOT checked in a browser (the browser tool could not act on the page).
+- P7 security review fixes (see `docs/security-and-privacy.md`): rate limits no longer trust a spoofed `X-Forwarded-For`
+  (set `TRUST_PROXY` behind a proxy); the dev-only mock admin login was removed; localhost CORS only outside production;
+  DNS servers opt-in; `npm start` was broken (shared packages are TypeScript) and the backend is now bundled with esbuild.
+- Run `npm run migrate` after pulling (migration 003 creates the P5 indexes). Production needs `TRUST_PROXY` set.
+- **Dev work is complete for the Dev 1 list.** Remaining: browser check of the new screens, building the Docker images, a real
+  restore drill, object-storage adapter, a superadmin screen for support access, the deferred walkthrough items below, and
+  joint integration testing with the AI pipeline once its counting service exists.
 - The AI worker is heartbeat-only and reports DEGRADED (Dev 2 replaces it).
 
 ## 10. Commands
@@ -309,6 +350,32 @@ Env files (gitignored): `apps/backend/.env`, `apps/owner/.env.local`, `apps/supe
 - The backend rate limiter is in memory; it does not work across multiple instances (needs Redis).
 - Standalone MongoDB has no multi-document transactions; multi-step writes use compensating deletes.
 
+## Deferred items: fix after ALL phases are complete
+
+The owner asked to collect these and work on them together once every phase is done. Do not fix them piecemeal unless a
+phase needs it. Add new deferred items here.
+
+### Browser walkthrough findings (P1, 2026-10-26, against a throw-away database)
+
+Verified in Chrome: owner sign-in, site switcher, dashboard, alerts list, cameras page, site profile edit (duplicate code
+rejected, rename persisted after reload), new site with validation, add-camera form blocks submit without consent,
+operator sees only the assigned site and gets 403 on create site / list users, platform admin sees the "company panel"
+notice, registration creates a new company that sees no other data, superadmin overview / companies (suspend and reactivate
+with mandatory reason, company owner locked out while suspended) / sites / camera health / audit trail.
+
+Open findings (deferred, see the heading above):
+1. ~~**Owner panel shows a stale camera as "Online"**~~ FIXED in P3 (the API returns an effective status and the panel uses it) ("The camera is sending video") while the superadmin health page marks the
+   same camera OFFLINE (stale). The owner panel must use the same effective-status rule. (P3/P4; also Dev 2 camera health)
+2. ~~**UI is not permission-aware**~~ FIXED in P3 for cameras, sites, settings, users, zone editor: an operator still sees Add camera, Edit, Delete and Test buttons that the API refuses with 403.
+   Hide or disable controls by role (P3).
+3. PARTLY FIXED in P3 (the zone editor and its old zone types stay until Dev 2 replaces them). Old wording remained in the owner panel: "shutter", placeholder "Main Street Site", "A shutter zone was saved ... from this
+   browser" (a localStorage marker, not the database), login page copy (P3).
+4. The auth cookie `dbi_token` is set on host `localhost`, so the owner panel and the superadmin panel share it across ports
+   in development; signing in to one replaces the other's session.
+5. The seeded demo camera was marked ONLINE with a fake stream. Fixed in the seed (now PENDING_TEST, no frames); re-run the
+   seed to refresh existing demo data.
+6. Settings is now the new model (P3). The Notifications screen still shows the old layout (P4).
+
 ## 12. Work log
 
 | Date | Work | Verified |
@@ -317,3 +384,11 @@ Env files (gitignored): `apps/backend/.env`, `apps/owner/.env.local`, `apps/supe
 | 2026-10-26 | Created env files for all apps (own secrets, new Atlas database `cargo_ai`); installed dependencies | Atlas connection OK, typecheck |
 | 2026-10-26 | Cleanup: removed connector, browser push, schedule/security-state, theft detector, old docs, notification preferences; rewrote README; added backend `.env.example`; pushed to `feature/development` | typecheck, 10 owner tests, owner `next build` |
 | 2026-10-26 | Started Step 6 foundation (types, models, permissions + 11 tests, tenant middleware, auth, company, sites). Uncommitted | permissions tests only |
+| 2026-10-26 | **P1 tenancy foundation**: users/invitations/roles/status, cameras under sites + assign-site, events/notifications/internal/superadmin moved to company/site, new seed, owner and superadmin panels renamed to company/site, all mock data removed, `serviceAuth` now compares tokens in constant time | typecheck, 10 owner + 11 backend unit + 34 backend integration tests, owner and superadmin `next build` |
+| 2026-10-26 | P1 browser walkthrough in Chrome (own backend :4100, owner :3100, superadmin :3101, database `cargo_ai_test`, dropped afterwards); seed no longer fakes an ONLINE camera | see findings above |
+| 2026-10-26 | **P2 events core, evidence and standards (backend)**: response envelope, error codes, body limit, rate limiters, migrations runner (2 migrations), cargo event model + history + notes, transition map, event workflow endpoints, `createCargoEvent()`, evidence storage/upload/signed links/audit, retention job, ingestion stopgap, seed events through `createCargoEvent`, owner Alerts screens moved to the new model | typecheck, 23 backend unit + 63 integration tests (QA-03, QA-08, QA-09), both `next build`, browser review flow |
+| 2026-10-26 | **P3 company settings and panel migration**: shared permission rules, settings model/endpoints/audit, notification rules and per-company retention take effect, honest camera status in the API, Sites / Users and roles / Settings / invitation screens, role-aware controls, wording cleanup, evidence folder `uploads` | typecheck, 35 backend unit + 74 integration tests, owner 10 tests, both `next build`, browser run of the new screens |
+| 2026-10-26 | **P4 event inbox and notifications**: notification dispatcher (atomic claim, retry with backoff, dead-letter, `job:notifications`), read state and unread count API, `assignedTo` filter, event summary and assignee endpoints; owner Alerts inbox (company and site), notifications screen, unread badge | typecheck, backend integration 85 |
+| 2026-10-26 | **P5 manifests, vehicles, sessions, reconciliation**: models, observed-count contract, pure reconcile + CSV parser (17 unit tests), API for vehicles/manifests/import/sessions, Shipments screen | unit 52, integration 110, owner 11, both `next build`s, API run on a real server; browser not used |
+| 2026-10-26 | **P6 reports, audit, superadmin**: reports (cargo activity, mismatches, CSV export) in site time zones with shifts and coverage gaps, company audit trail API, audited support access to evidence; owner Reports and Audit trail screens | unit 58, integration 127, owner 12 |
+| 2026-10-26 | **P7 observability, delivery, docs, hardening**: structured logs, metrics, readiness, graceful shutdown, esbuild production bundle (fixed broken `npm start`), backup/restore with tests, CI, Dockerfiles + prod compose (unbuilt), OpenAPI with sync test, README, runbook, production env, QA checklist, security review with 4 fixes | unit 61, integration 138, both builds, built server run |

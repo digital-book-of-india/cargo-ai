@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { ImageOff, Info, Video } from "lucide-react";
 import { Alert } from "@/components/common/States";
 import { Button, Card } from "@/components/ui";
-import { hasEvidenceButNoAddress, isSafeEvidenceUrl, isSystemEvent } from "@/lib/events";
-import type { OwnerEvent } from "@/lib/events";
+import { isSafeEvidenceUrl, isSystemEvent } from "@/lib/events";
+import type { OwnerEventDetail } from "@/lib/events";
 import { formatInTimezone } from "@/lib/utils/time";
 
 interface Props {
-  event: OwnerEvent;
+  event: OwnerEventDetail;
   timezone: string;
   /** re-reads the event to get a fresh (not expired) evidence address */
   onReload: () => void;
@@ -38,22 +38,9 @@ export function EvidenceViewer({ event, timezone, onReload }: Props) {
       <div className="flex items-start gap-3 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
         <p>
-          This is a system notice about your monitoring, not something seen near the shutter, so it
+          This is a system notice about your monitoring, not something seen on camera, so it
           has no picture.
         </p>
-      </div>
-    );
-  } else if (hasEvidenceButNoAddress(event.evidence)) {
-    body = (
-      <div className="flex items-start gap-3 rounded-lg border border-dashed p-4 text-sm">
-        <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <div>
-          <p className="font-medium">Evidence was recorded but cannot be shown here yet</p>
-          <p className="mt-1 text-muted-foreground">
-            It is kept privately. Secure viewing is not switched on for this service, so no picture is
-            available in the app.
-          </p>
-        </div>
       </div>
     );
   } else if (!snapshotUrl && !clipUrl) {
@@ -100,7 +87,7 @@ export function EvidenceViewer({ event, timezone, onReload }: Props) {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={snapshotUrl}
-                  alt={`Camera picture for this alert, ${formatInTimezone(event.startedAt, timezone)}`}
+                  alt={`Camera picture for this alert, ${formatInTimezone(event.occurredAt, timezone)}`}
                   className="relative mx-auto max-h-[28rem] w-full object-contain"
                   onLoad={() => setImageState("ready")}
                   onError={() => setImageState("failed")}
@@ -108,7 +95,7 @@ export function EvidenceViewer({ event, timezone, onReload }: Props) {
               </div>
             )}
             <figcaption className="mt-2 text-xs text-muted-foreground">
-              Picture from {formatInTimezone(event.startedAt, timezone)}.
+              Picture from {formatInTimezone(event.occurredAt, timezone)}.
             </figcaption>
           </figure>
         )}

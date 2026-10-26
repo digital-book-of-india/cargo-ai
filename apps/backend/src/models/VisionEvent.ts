@@ -19,7 +19,7 @@ export interface IVisionEventDocument extends Document {
   _id: Types.ObjectId;
   eventKey: string; // idempotency key, globally unique
   payloadHash: string; // sha256 of the normalised payload, to detect key reuse
-  shopId: Types.ObjectId; // site (tenant key)
+  siteId: Types.ObjectId; // site (tenant key)
   cameraId: Types.ObjectId;
   zoneId: Types.ObjectId | null;
   eventType: VisionEventType;
@@ -36,7 +36,7 @@ const visionEventSchema = new Schema<IVisionEventDocument>(
   {
     eventKey: { type: String, required: true, unique: true, maxlength: 200 },
     payloadHash: { type: String, required: true },
-    shopId: { type: Schema.Types.ObjectId, ref: "Shop", required: true, index: true },
+    siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
     cameraId: { type: Schema.Types.ObjectId, ref: "Camera", required: true, index: true },
     zoneId: { type: Schema.Types.ObjectId, ref: "VisionZone", default: null, index: true },
     eventType: { type: String, enum: VISION_EVENT_TYPE_VALUES, required: true, index: true },
@@ -49,7 +49,7 @@ const visionEventSchema = new Schema<IVisionEventDocument>(
   { collection: "vision_events", timestamps: true }
 );
 
-visionEventSchema.index({ shopId: 1, occurredAt: -1 });
+visionEventSchema.index({ siteId: 1, occurredAt: -1 });
 
 export const VisionEventModel =
   (mongoose.models.VisionEvent as mongoose.Model<IVisionEventDocument>) ||

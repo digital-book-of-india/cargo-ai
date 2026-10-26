@@ -8,7 +8,7 @@ import { AiWorkerHealthModel, VisionCameraMonitorModel, VisionEventModel } from 
 const TICK_MS = 15_000;
 let timer: NodeJS.Timeout | null = null;
 
-type MonitorRow = { shopId: Types.ObjectId; cameraId: Types.ObjectId; lastFrameAt?: Date | null; workerId?: string | null };
+type MonitorRow = { siteId: Types.ObjectId; cameraId: Types.ObjectId; lastFrameAt?: Date | null; workerId?: string | null };
 type WorkerRow = { workerId: string; status: "ONLINE" | "DEGRADED" | "OFFLINE"; lastHeartbeatAt: Date };
 type SystemEventType = "camera_offline" | "ai_service_unavailable";
 
@@ -27,7 +27,7 @@ export function stopVisionMonitorJob(): void {
 
 export async function runStalenessCheck(now: Date = new Date()): Promise<{ cameraOffline: number; aiUnavailable: number }> {
   const monitors = await VisionCameraMonitorModel.find({ enabled: true })
-    .select("shopId cameraId lastFrameAt workerId")
+    .select("siteId cameraId lastFrameAt workerId")
     .lean<MonitorRow[]>();
   if (monitors.length === 0) return { cameraOffline: 0, aiUnavailable: 0 };
 
@@ -76,7 +76,7 @@ async function recordSystemEvent(
     await VisionEventModel.create({
       eventKey,
       payloadHash: crypto.createHash("sha256").update(eventKey).digest("hex"),
-      shopId: m.shopId,
+      siteId: m.siteId,
       cameraId: m.cameraId,
       zoneId: null,
       eventType,

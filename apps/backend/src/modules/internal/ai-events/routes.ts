@@ -1,112 +1,51 @@
-import { Router, Request, Response, NextFunction } from "express";
-import { Types } from "mongoose";
+import { Router, Request, Response } from "express";
 import { aiEventSchema } from "@dbi/validation";
-import { SecurityEventModel, ShopModel, NotificationModel, CameraModel } from "../../../models";
+import { asyncHandler } from "../../../middleware/auth";
+import { AppError } from "../../../middleware/errorHandler";
+import { createCargoEvent } from "../../../services/events/createEvent";
 
 export const aiEventsRouter = Router();
 
-// POST /internal/v1/ai/events
-aiEventsRouter.post("/", async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const parseResult = aiEventSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      res.status(400).json({
-        error: {
-          code: "VALIDATION_ERROR",
-          message: parseResult.error.errors[0]?.message ?? "Invalid AI event payload",
-          requestId: req.requestId,
-        },
-      });
-      return;
+// POST /internal/v1/ai/events and POST /api/v1/ai/events  (service token only)
+// Thin ingestion endpoint: validates the Appendix A payload and hands it to createCargoEvent(),
+// which owns tenant checks and idempotency. The count ledger is added by the AI-pipeline work.
+aiEventsRouter.post(
+  "/",
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = aiEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid AI event payload");
+    }
+    const body = parsed.data;
+
+    // The Idempotency-Key header, when sent, must agree with the body so a retry cannot be split in two.
+    const header = req.headers["idempotency-key"];
+    const headerKey = Array.isArray(header) ? header[0] : header;
+    if (headerKey && headerKey !== body.eventKey) {
+      throw new AppError(400, "VALIDATION_ERROR", "Idempotency-Key must match eventKey.");
     }
 
-    const {
-      eventId,
-      shopId,
-      cameraId,
-      eventType,
-      confidence,
-      startedAt,
-      endedAt,
-      evidence,
-      modelVersion,
-    } = parseResult.data;
-
-    // Idempotency check
-    const existing = await SecurityEventModel.findOne({ eventId });
-    if (existing) {
-      res.status(200).json({
-        data: {
-          eventId: existing.eventId,
-          status: "ALREADY_PROCESSED",
-        },
-      });
-      return;
-    }
-
-    const shop = await ShopModel.findById(shopId);
-    if (!shop) {
-      res.status(404).json({
-        error: {
-          code: "NOT_FOUND",
-          message: "Target shop not found for this event.",
-          requestId: req.requestId,
-        },
-      });
-      return;
-    }
-
-    // Resolve cameraId safely (handle ObjectId or fallback to shop camera)
-    let targetCameraId: Types.ObjectId;
-    if (Types.ObjectId.isValid(cameraId)) {
-      targetCameraId = new Types.ObjectId(cameraId);
-    } else {
-      const foundCam = await CameraModel.findOne({ shopId: shop._id });
-      if (foundCam) {
-        targetCameraId = foundCam._id;
-      } else {
-        res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid cameraId and no cameras found for target shop.",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-    }
-
-    // Persist new event
-    const event = await SecurityEventModel.create({
-      eventId,
-      shopId: shop._id,
-      cameraId: targetCameraId,
-      eventType,
-      confidence,
-      startedAt: new Date(startedAt),
-      endedAt: endedAt ? new Date(endedAt) : undefined,
-      evidence,
-      reviewStatus: "NEW",
-      demoFlag: false,
-      modelVersion: modelVersion ?? "detector-v0.1",
-    });
-
-    // Create in-app notification for shop owner
-    await NotificationModel.create({
-      eventId: event.eventId,
-      recipientUserId: shop.ownerId,
-      channel: "IN_APP",
-      status: "SENT",
-      attempts: 1,
-    });
-
-    res.status(202).json({
-      data: {
-        eventId: event.eventId,
-        status: "QUEUED",
+    const { event, created } = await createCargoEvent({
+      eventKey: body.eventKey,
+      siteId: body.siteId,
+      cameraId: body.cameraId,
+      zoneId: body.zoneId ?? null,
+      eventType: body.eventType,
+      severity: body.severity,
+      summary: body.summary,
+      occurredAt: body.occurredAt,
+      payload: {
+        ...(body.track ? { track: body.track } : {}),
+        ...(body.movement ? { movement: body.movement } : {}),
       },
+      evidence: body.evidence,
+      model: body.model ?? null,
+      expectedCompanyId: body.companyId,
     });
-  } catch (err) {
-    next(err);
-  }
-});
+
+    // A retry gets the same event id and the same outcome, and nothing new is written.
+    res
+      .status(created ? 202 : 200)
+      .json({ data: { eventId: event._id.toString(), ingestionStatus: created ? "accepted" : "already_processed" } });
+  })
+);

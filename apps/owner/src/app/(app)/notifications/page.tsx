@@ -1,100 +1,78 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, ChevronRight, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Alert, ApiErrorState, EmptyState, LoadingState } from "@/components/common/States";
-import { Badge, Button, Card } from "@/components/ui";
+import { EVENT_TYPE_LABEL, EventStatusBadge, SeverityBadge } from "@/components/common/StatusBadges";
+import { Badge, Button, Card, Checkbox } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
 import { notificationsApi } from "@/lib/api/notifications";
+import { friendlyMessage } from "@/lib/api/messages";
 import { timeAgo } from "@/lib/camera";
-import {
-  CHANNEL_LABEL,
-  DELIVERY_META,
-  applyLatestNotifications,
-  countFailed,
-  notificationShopId,
-  sortNotifications,
-} from "@/lib/notifications";
-import type { OwnerNotification } from "@/lib/notifications";
-import { useShop } from "@/lib/shop/ShopProvider";
-import { formatInTimezone } from "@/lib/utils/time";
+import { deliveryNote, sortNotifications } from "@/lib/notifications";
+import type { AppNotification } from "@/types";
 
 // How often the list is re-read while the page is open and visible.
-const NOTIFICATIONS_REFRESH_MS = Number(process.env.NEXT_PUBLIC_NOTIFICATIONS_REFRESH_MS ?? 30000);
+const REFRESH_MS = Number(process.env.NEXT_PUBLIC_NOTIFICATIONS_REFRESH_MS ?? 30000);
+
+function announceChange() {
+  window.dispatchEvent(new Event("dbi:notifications-changed"));
+}
 
 export default function NotificationsPage() {
-  const { current, shops } = useShop();
-  const first = useAsync(async () => {
-    const res = await notificationsApi.list();
-    return sortNotifications((res.notifications ?? []) as OwnerNotification[]);
-  }, []);
-  const { error, loading, reload } = first;
-
-  const [items, setItems] = useState<OwnerNotification[] | null>(null);
-  const [newCount, setNewCount] = useState(0);
-  const [refreshFailed, setRefreshFailed] = useState(false);
-  const [, setClock] = useState(0);
-  const itemsRef = useRef<OwnerNotification[] | null>(null);
-  itemsRef.current = items;
-  const busy = useRef(false);
-  const mounted = useRef(true);
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const loaded = useAsync(() => notificationsApi.list({ unread: unreadOnly, limit: 50 }), [unreadOnly]);
+  const [items, setItems] = useState<AppNotification[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  // a full (manual) load replaces what is shown
-  useEffect(() => {
-    if (first.data) {
-      setItems(first.data);
-      setNewCount(0);
-      setRefreshFailed(false);
+    if (loaded.data) {
+      setItems(sortNotifications(loaded.data.items));
+      setUnread(loaded.data.unreadCount);
     }
-  }, [first.data]);
+  }, [loaded.data]);
 
-  // quiet re-read: no spinner, new rows are counted
-  const refreshQuietly = useCallback(async () => {
-    if (busy.current || document.visibilityState !== "visible" || !itemsRef.current) return;
-    busy.current = true;
+  const reloadQuietly = loaded.reload;
+  useEffect(() => {
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") reloadQuietly();
+    }, REFRESH_MS);
+    return () => clearInterval(poll);
+  }, [reloadQuietly]);
+
+  const markRead = useCallback(async (n: AppNotification) => {
+    if (n.readAt) return;
     try {
-      const res = await notificationsApi.list();
-      if (!mounted.current) return;
-      const merged = applyLatestNotifications(itemsRef.current ?? [], (res.notifications ?? []) as OwnerNotification[]);
-      setItems(merged.items);
-      if (merged.newCount > 0) setNewCount((n) => n + merged.newCount);
-      setRefreshFailed(false);
+      await notificationsApi.markRead(n.id);
+      setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)));
+      setUnread((c) => Math.max(0, c - 1));
+      announceChange();
     } catch {
-      if (mounted.current) setRefreshFailed(true);
-    } finally {
-      busy.current = false;
+      // opening the alert still works; the badge catches up on the next refresh
     }
   }, []);
 
-  useEffect(() => {
-    const poll = setInterval(() => void refreshQuietly(), NOTIFICATIONS_REFRESH_MS);
-    const clock = setInterval(() => setClock((c) => c + 1), 30000);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refreshQuietly();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      clearInterval(poll);
-      clearInterval(clock);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [refreshQuietly]);
+  async function markAllRead() {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await notificationsApi.readAll();
+      setItems((prev) => prev.map((x) => ({ ...x, readAt: x.readAt ?? new Date().toISOString() })));
+      setUnread(0);
+      announceChange();
+    } catch (err) {
+      setActionError(friendlyMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
-  if (loading && !items) return <LoadingState label="Loading notifications..." />;
-  if (error && !items) return <ApiErrorState error={error} onRetry={reload} />;
-  if (!items) return null;
-  const data = items;
-
-  const failed = countFailed(data);
+  if (loaded.loading && !loaded.data) return <LoadingState label="Loading notifications..." />;
+  if (loaded.error && !loaded.data) return <ApiErrorState error={loaded.error} onRetry={loaded.reload} />;
 
   return (
     <div className="animate-fade-up space-y-5">
@@ -103,79 +81,79 @@ export default function NotificationsPage() {
         description="Everything we have told you about."
         actions={
           <>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/settings">Settings</Link>
+            <Button variant="outline" size="sm" onClick={() => void markAllRead()} loading={busy} disabled={unread === 0}>
+              <CheckCheck aria-hidden /> Mark all as read
             </Button>
-            <Button variant="outline" size="sm" loading={loading} onClick={reload}>
+            <Button variant="outline" size="sm" loading={loaded.loading} onClick={loaded.reload}>
               <RefreshCw aria-hidden /> Refresh
             </Button>
           </>
         }
       />
 
-      {(error || refreshFailed) && (
-        <Alert tone="warning">Could not refresh. This list may be out of date.</Alert>
-      )}
-      {newCount > 0 && (
-        <Alert tone="info">
-          {newCount} new notification{newCount === 1 ? "" : "s"} arrived.
-        </Alert>
-      )}
-      {failed > 0 && (
-        <Alert tone="warning">
-          {failed} message{failed === 1 ? "" : "s"} could not be delivered. Check your alerts so you do
-          not miss anything.
-        </Alert>
-      )}
+      {loaded.error && <Alert tone="warning">Could not refresh. These may be out of date.</Alert>}
+      {actionError && <Alert tone="danger">{actionError}</Alert>}
 
-      {data.length === 0 ? (
+      <div className="flex items-center gap-2">
+        <Checkbox id="unread-only" checked={unreadOnly} onCheckedChange={(v) => setUnreadOnly(v === true)} />
+        <label htmlFor="unread-only" className="text-sm">
+          Show unread only
+        </label>
+        <span role="status" aria-live="polite" className="ml-auto text-sm text-muted-foreground">
+          {unread === 0 ? "You are all caught up." : `${unread} unread`}
+        </span>
+      </div>
+
+      {items.length === 0 ? (
         <EmptyState
           icon={<Bell className="size-6" aria-hidden />}
-          title="No notifications yet"
-          hint="When we notify you about an alert, it will be listed here."
+          title={unreadOnly ? "Nothing unread" : "No notifications yet"}
+          hint="When the system finds something worth a look, you will be told here."
         />
       ) : (
         <Card>
           <ul className="divide-y" aria-label="Notifications">
-            {data.map((n) => {
-              const d = DELIVERY_META[n.status] ?? DELIVERY_META.PENDING;
-              const shopId = notificationShopId(n, current?.id ?? null);
-              // time in the zone of the shop the notification belongs to
-              const tz = shops.find((s) => s.id === shopId)?.timezone ?? current?.timezone ?? "UTC";
-              const href = n.eventId && shopId ? `/shops/${shopId}/alerts/${n.eventId}` : null;
-              const inner = (
+            {items.map((n) => {
+              const note = deliveryNote(n.status);
+              const body = n.event ? (
                 <>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">
-                        {n.eventId ? "Alert notification" : "Notification"}
-                      </span>
-                      <Badge tone="neutral">{CHANNEL_LABEL[n.channel] ?? n.channel}</Badge>
-                      <Badge tone={d.tone} dot>
-                        {d.label}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {formatInTimezone(n.createdAt, tz)} ({timeAgo(n.createdAt)})
-                    </p>
-                    {d.hint && n.status === "FAILED" && (
-                      <p className="mt-1 text-xs font-medium text-destructive">{d.hint}</p>
-                    )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!n.readAt && <Badge tone="primary">New</Badge>}
+                    <span className={n.readAt ? "font-medium" : "font-semibold"}>{EVENT_TYPE_LABEL[n.event.eventType]}</span>
+                    <SeverityBadge severity={n.event.severity} />
+                    <EventStatusBadge status={n.event.status} />
                   </div>
-                  {href && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {n.event.siteName} · {timeAgo(n.createdAt)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!n.readAt && <Badge tone="primary">New</Badge>}
+                    <span className="font-medium">An alert you can no longer open</span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{timeAgo(n.createdAt)}</p>
                 </>
               );
               return (
-                <li key={n.id}>
-                  {href ? (
+                <li key={n.id} className="p-4 sm:p-5">
+                  {n.event ? (
                     <Link
-                      href={href}
-                      className="flex items-center gap-3 p-4 transition-colors hover:bg-accent/50 sm:p-5"
+                      href={`/sites/${n.event.siteId}/alerts/${n.event.id}`}
+                      onClick={() => void markRead(n)}
+                      className="block rounded-md hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     >
-                      {inner}
+                      {body}
                     </Link>
                   ) : (
-                    <div className="flex items-center gap-3 p-4 sm:p-5">{inner}</div>
+                    <div>{body}</div>
+                  )}
+                  {note && <p className="mt-1 text-xs text-warning">{note}</p>}
+                  {!n.readAt && (
+                    <Button variant="ghost" size="sm" className="mt-1 -ml-2" onClick={() => void markRead(n)}>
+                      Mark as read
+                    </Button>
                   )}
                 </li>
               );

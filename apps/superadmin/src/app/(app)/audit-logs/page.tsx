@@ -66,7 +66,7 @@ export default function AuditLogsPage() {
       <form onSubmit={handleFilterSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-4 rounded-xl border border-[#DBEAFE] shadow-sm">
         <input
           type="text"
-          placeholder="Action (e.g. SHOP_SUSPENDED)..."
+          placeholder="Action (e.g. COMPANY_SUSPENDED)..."
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-[#2563EB]"
@@ -74,7 +74,7 @@ export default function AuditLogsPage() {
 
         <input
           type="text"
-          placeholder="Target ID (e.g. shop_123)..."
+          placeholder="Target ID (e.g. a company or site ID)..."
           value={targetIdFilter}
           onChange={(e) => setTargetIdFilter(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-[#2563EB]"

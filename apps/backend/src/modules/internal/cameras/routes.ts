@@ -8,12 +8,13 @@ export const internalCamerasRouter = Router();
 // Lets the AI worker discover which cameras exist (no secrets here).
 internalCamerasRouter.get("/", async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const cameras = await CameraModel.find({}).select("_id shopId name protocol status");
+    const cameras = await CameraModel.find({}).select("_id companyId siteId name protocol status");
     res.json({
       data: {
         items: cameras.map((c) => ({
           cameraId: c._id.toString(),
-          shopId: c.shopId.toString(),
+          companyId: c.companyId.toString(),
+          siteId: c.siteId.toString(),
           name: c.name,
           protocol: c.protocol,
           status: c.status,
@@ -45,7 +46,8 @@ internalCamerasRouter.get(
       res.json({
         data: {
           cameraId: camera._id.toString(),
-          shopId: camera.shopId.toString(),
+          companyId: camera.companyId.toString(),
+          siteId: camera.siteId.toString(),
           streamUrl,
           zone: zone
             ? {

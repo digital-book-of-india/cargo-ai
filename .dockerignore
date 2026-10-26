@@ -1,0 +1,14 @@
+**/node_modules
+**/.next
+**/.next-*
+**/dist
+.git
+.github
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.production.example
+apps/backend/uploads
+apps/backend/backups
+**/__pycache__
+**/*.log

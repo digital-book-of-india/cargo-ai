@@ -9,7 +9,7 @@ import {
 } from "@dbi/validation";
 import { CameraModel, VisionZoneModel, type IVisionZoneDocument } from "../../../models";
 import { AppError } from "../../../middleware/errorHandler";
-import { assertShopAccess } from "../shared/access";
+import { assertSiteAccess } from "../shared/access";
 import { parseObjectId } from "../shared/http";
 
 // Deterministic JSON (sorted keys) so the same config always gives the same hash.
@@ -49,7 +49,7 @@ export function computeZoneHash(z: {
 export function toVisionZoneDto(zone: IVisionZoneDocument): VisionZone {
   return {
     id: zone._id.toString(),
-    siteId: zone.shopId.toString(),
+    siteId: zone.siteId.toString(),
     cameraId: zone.cameraId.toString(),
     name: zone.name,
     zoneType: zone.zoneType,
@@ -63,10 +63,10 @@ export function toVisionZoneDto(zone: IVisionZoneDocument): VisionZone {
   };
 }
 
-async function assertCameraInSite(cameraId: Types.ObjectId, shopId: Types.ObjectId): Promise<void> {
-  const camera = await CameraModel.findById(cameraId).select("shopId").lean();
+async function assertCameraInSite(cameraId: Types.ObjectId, siteId: Types.ObjectId): Promise<void> {
+  const camera = await CameraModel.findById(cameraId).select("siteId").lean();
   // Same 404 for "missing" and "other site": no existence leak across tenants.
-  if (!camera || String(camera.shopId) !== shopId.toString()) {
+  if (!camera || String(camera.siteId) !== siteId.toString()) {
     throw new AppError(404, "NOT_FOUND", "Camera not found for this site.");
   }
 }
@@ -76,7 +76,7 @@ export async function loadZoneForUser(req: Request, zoneIdParam: string): Promis
   const zoneId = parseObjectId(zoneIdParam, "zoneId");
   const zone = await VisionZoneModel.findById(zoneId);
   if (!zone) throw new AppError(404, "NOT_FOUND", "Zone not found.");
-  await assertShopAccess(req, zone.shopId.toString());
+  await assertSiteAccess(req, zone.siteId.toString());
   return zone;
 }
 
@@ -84,10 +84,10 @@ export async function listZones(
   req: Request,
   input: { siteId: string; cameraId?: string; cursor?: string; limit: number }
 ): Promise<{ items: VisionZone[]; nextCursor: string | null }> {
-  const shopId = parseObjectId(input.siteId, "siteId");
-  await assertShopAccess(req, shopId.toString());
+  const siteId = parseObjectId(input.siteId, "siteId");
+  await assertSiteAccess(req, siteId.toString());
 
-  const filter: Record<string, any> = { shopId };
+  const filter: Record<string, any> = { siteId };
   if (input.cameraId) filter.cameraId = parseObjectId(input.cameraId, "cameraId");
   if (input.cursor) filter._id = { $gt: parseObjectId(input.cursor, "cursor") };
 
@@ -101,13 +101,13 @@ export async function listZones(
 }
 
 export async function createZone(req: Request, input: SaveVisionZoneInput): Promise<VisionZone> {
-  const shopId = parseObjectId(input.siteId, "siteId");
-  await assertShopAccess(req, shopId.toString());
+  const siteId = parseObjectId(input.siteId, "siteId");
+  await assertSiteAccess(req, siteId.toString());
   const cameraId = parseObjectId(input.cameraId, "cameraId");
-  await assertCameraInSite(cameraId, shopId);
+  await assertCameraInSite(cameraId, siteId);
 
   const zone = await VisionZoneModel.create({
-    shopId,
+    siteId,
     cameraId,
     name: input.name,
     zoneType: input.zoneType,
@@ -156,8 +156,8 @@ export async function validateZone(
 ): Promise<{ passed: boolean; issues: string[] }> {
   const issues: string[] = [];
 
-  const camera = await CameraModel.findById(zone.cameraId).select("shopId secretRef").lean();
-  if (!camera || String(camera.shopId) !== zone.shopId.toString()) {
+  const camera = await CameraModel.findById(zone.cameraId).select("siteId secretRef").lean();
+  if (!camera || String(camera.siteId) !== zone.siteId.toString()) {
     issues.push("Camera does not belong to this site.");
   } else if (!camera.secretRef) {
     issues.push("Camera has no stream configured yet.");

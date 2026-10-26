@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/common/Brand";
-import { ShopSwitcher } from "@/components/shop/ShopSwitcher";
-import { useShop } from "@/lib/shop/ShopProvider";
+import { SiteSwitcher } from "@/components/site/SiteSwitcher";
+import { useSite } from "@/lib/site/SiteProvider";
 import { cn } from "@/lib/utils/cn";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { useUnreadCount } from "@/hooks/useUnreadCount";
 import { buildNav, isActive } from "./nav";
 import { UserMenu } from "./UserMenu";
 
-// Phone layout: slim top bar (brand, shop switcher, account) plus a bottom tab bar.
+// Phone layout: slim top bar (brand, site switcher, account) plus a bottom tab bar.
 export function MobileTopbar() {
   return (
     <header className="sticky top-0 z-30 border-b bg-background/90 px-4 py-2.5 backdrop-blur md:hidden">
@@ -17,15 +19,17 @@ export function MobileTopbar() {
         <Brand />
         <UserMenu compact />
       </div>
-      <ShopSwitcher className="mt-2.5" />
+      <SiteSwitcher className="mt-2.5" />
     </header>
   );
 }
 
 export function MobileTabs() {
   const pathname = usePathname();
-  const { current } = useShop();
-  const { tabs } = buildNav(current?.id ?? null);
+  const { current } = useSite();
+  const { can } = useAuth();
+  const { count: unread } = useUnreadCount();
+  const { tabs } = buildNav(current?.id ?? null, { users: can("users:read"), audit: can("audit:read"), unread });
 
   return (
     <nav
@@ -45,7 +49,15 @@ export function MobileTabs() {
               active ? "text-primary" : "text-muted-foreground"
             )}
           >
-            <Icon className="size-5" aria-hidden />
+            <span className="relative">
+              <Icon className="size-5" aria-hidden />
+              {item.badge ? (
+                <span className="absolute -right-2 -top-1.5 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  {item.badge > 99 ? "99+" : item.badge}
+                  <span className="sr-only"> unread</span>
+                </span>
+              ) : null}
+            </span>
             {item.label}
           </Link>
         );

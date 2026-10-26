@@ -1,13 +1,12 @@
 import { RequireAuth } from "@/components/auth/RequireAuth";
-import { DemoBanner } from "@/components/common/DemoBanner";
 import { MobileTabs, MobileTopbar } from "@/components/layout/MobileNav";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { ShopProvider } from "@/lib/shop/ShopProvider";
+import { SiteProvider } from "@/lib/site/SiteProvider";
 
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireAuth>
-      <ShopProvider>
+      <SiteProvider>
         <div className="min-h-screen bg-muted/40">
           <a
             href="#main"
@@ -18,7 +17,6 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           <div className="flex min-h-screen">
             <Sidebar />
             <div className="flex min-w-0 flex-1 flex-col">
-              <DemoBanner />
               <MobileTopbar />
               <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 px-4 pb-24 pt-6 md:px-8 md:pb-10 md:pt-8">
                 {children}
@@ -27,7 +25,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           </div>
           <MobileTabs />
         </div>
-      </ShopProvider>
+      </SiteProvider>
     </RequireAuth>
   );
 }

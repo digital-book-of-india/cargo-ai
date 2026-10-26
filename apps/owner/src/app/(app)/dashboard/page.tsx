@@ -21,11 +21,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, SelectField 
 import { useAsync } from "@/hooks/useAsync";
 import { eventsApi } from "@/lib/api/events";
 import { visionApi } from "@/lib/api/vision";
-import { useShop } from "@/lib/shop/ShopProvider";
-import type { SecurityEvent, Shop, VisionCameraMonitoringStatus, VisionCountSummaryRow } from "@dbi/api-types";
+import { useSite } from "@/lib/site/SiteProvider";
+import type { CargoEventSummary, Site, VisionCameraMonitoringStatus, VisionCountSummaryRow } from "@/types";
 
-function DashboardContent({ shop }: { shop: Shop }) {
-  const shopId = shop.id;
+function DashboardContent({ site }: { site: Site }) {
+  const siteId = site.id;
   const [range, setRange] = useState<"today" | "week" | "month">("week");
 
   const fromIso =
@@ -38,48 +38,48 @@ function DashboardContent({ shop }: { shop: Shop }) {
 
   const countsQuery = useAsync(async () => {
     try {
-      const res = await visionApi.getSummary(shopId, "zone", fromIso, toIso);
+      const res = await visionApi.getSummary(siteId, "zone", fromIso, toIso);
       return res.items;
     } catch {
       return [] as VisionCountSummaryRow[];
     }
-  }, [shopId, range]);
+  }, [siteId, range]);
 
   const trendQuery = useAsync(async () => {
     try {
-      const res = await visionApi.getSummary(shopId, "day", fromIso, toIso);
+      const res = await visionApi.getSummary(siteId, "day", fromIso, toIso);
       return res.items;
     } catch {
       return [] as VisionCountSummaryRow[];
     }
-  }, [shopId, range]);
+  }, [siteId, range]);
 
   const shiftQuery = useAsync(async () => {
     try {
-      const res = await visionApi.getSummary(shopId, "shift", fromIso, toIso);
+      const res = await visionApi.getSummary(siteId, "shift", fromIso, toIso);
       return res.items;
     } catch {
       return [] as VisionCountSummaryRow[];
     }
-  }, [shopId, range]);
+  }, [siteId, range]);
 
   const monitoringQuery = useAsync(async () => {
     try {
-      const res = await visionApi.getStatus(shopId);
+      const res = await visionApi.getStatus(siteId);
       return res.items;
     } catch {
       return [] as VisionCameraMonitoringStatus[];
     }
-  }, [shopId]);
+  }, [siteId]);
 
   const alertsQuery = useAsync(async () => {
     try {
-      const res = await eventsApi.list(shopId, { limit: 6 });
-      return res.items as SecurityEvent[];
+      const res = await eventsApi.list(siteId, { limit: 6 });
+      return res.items as CargoEventSummary[];
     } catch {
-      return [] as SecurityEvent[];
+      return [] as CargoEventSummary[];
     }
-  }, [shopId]);
+  }, [siteId]);
 
   const counts = countsQuery.data ?? [];
   const totalIn = counts.reduce((acc, c) => acc + c.in, 0);
@@ -99,7 +99,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
-          title={`${shop.name} — Cargo Intelligence`}
+          title={`${site.name} — Cargo Intelligence`}
           description="Operational package tracking, line-crossing counts, count trends, and camera security health."
         />
         <div className="w-44">
@@ -176,7 +176,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-primary" /> Daily Count Trend
                 </CardTitle>
-                <CardDescription>Package IN/OUT movement grouped by site date ({shop.timezone || "Asia/Kolkata"})</CardDescription>
+                <CardDescription>Package IN/OUT movement grouped by site date ({site.timezone || "Asia/Kolkata"})</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -250,7 +250,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
                 <CardTitle>Camera & AI Monitoring Health</CardTitle>
                 <CardDescription>Live stream status, frame rates, worker status, and coverage limitations (QA-12)</CardDescription>
               </div>
-              <Link href={`/shops/${shopId}/cameras`} className="text-xs text-primary hover:underline">
+              <Link href={`/sites/${siteId}/cameras`} className="text-xs text-primary hover:underline">
                 Manage
               </Link>
             </div>
@@ -267,7 +267,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
                         <div className="font-medium flex items-center gap-2">
                           <Camera className="h-4 w-4 text-muted-foreground" />
                           <Link
-                            href={`/shops/${shopId}/cameras/${m.cameraId}/live`}
+                            href={`/sites/${siteId}/cameras/${m.cameraId}/live`}
                             className="hover:underline"
                           >
                             {m.cameraName}
@@ -281,7 +281,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
                       </div>
                       <div className="flex items-center gap-2">
                         <Link
-                          href={`/shops/${shopId}/cameras/${m.cameraId}/live`}
+                          href={`/sites/${siteId}/cameras/${m.cameraId}/live`}
                           className="text-xs border rounded px-2 py-0.5 hover:bg-muted inline-flex items-center gap-1"
                         >
                           <Eye className="h-3 w-3" /> Live
@@ -326,7 +326,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
                 <CardTitle>Unresolved Cargo Alerts & Events</CardTitle>
                 <CardDescription>Line crossing activity and restricted zone anomalies</CardDescription>
               </div>
-              <Link href={`/shops/${shopId}/alerts`} className="text-xs text-primary hover:underline">
+              <Link href={`/sites/${siteId}/alerts`} className="text-xs text-primary hover:underline">
                 View all
               </Link>
             </div>
@@ -347,11 +347,11 @@ function DashboardContent({ shop }: { shop: Shop }) {
                       </div>
                       <div className="text-xs text-muted-foreground flex items-center gap-2">
                         <Clock className="h-3 w-3" />
-                        {new Date(evt.startedAt).toLocaleTimeString()} • Status: {evt.reviewStatus}
+                        {new Date(evt.occurredAt).toLocaleTimeString()} • Status: {evt.status.replace("_", " ")}
                       </div>
                     </div>
                     <Link
-                      href={`/shops/${shopId}/alerts/${evt.id}`}
+                      href={`/sites/${siteId}/alerts/${evt.id}`}
                       className="text-xs border rounded px-2.5 py-1 hover:bg-muted"
                     >
                       Review
@@ -368,7 +368,7 @@ function DashboardContent({ shop }: { shop: Shop }) {
 }
 
 export default function DashboardPage() {
-  const { status, current, error, reload } = useShop();
+  const { status, current, error, reload } = useSite();
   const router = useRouter();
 
   useEffect(() => {
@@ -380,5 +380,5 @@ export default function DashboardPage() {
   }
   if (status !== "ready" || !current) return <LoadingState />;
 
-  return <DashboardContent key={current.id} shop={current} />;
+  return <DashboardContent key={current.id} site={current} />;
 }

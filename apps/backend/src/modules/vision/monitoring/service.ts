@@ -18,14 +18,14 @@ import {
   VisionZoneModel,
 } from "../../../models";
 import { AppError } from "../../../middleware/errorHandler";
-import { assertShopAccess } from "../shared/access";
+import { assertSiteAccess } from "../shared/access";
 import { parseObjectId } from "../shared/http";
 
 // Worker is told this in the config response, so it can change without a code change.
 export const WORKER_HEARTBEAT_INTERVAL_SECONDS = 15;
 
 type MonitorLean = {
-  shopId: Types.ObjectId;
+  siteId: Types.ObjectId;
   cameraId: Types.ObjectId;
   enabled: boolean;
   lastFrameAt?: Date | null;
@@ -108,10 +108,10 @@ export function buildCameraStatus(input: {
 }
 
 async function loadStatusItems(
-  shopId: Types.ObjectId,
+  siteId: Types.ObjectId,
   onlyCameraId?: Types.ObjectId
 ): Promise<VisionCameraMonitoringStatus[]> {
-  const cameraFilter: Record<string, unknown> = { shopId };
+  const cameraFilter: Record<string, unknown> = { siteId };
   if (onlyCameraId) cameraFilter._id = onlyCameraId;
   const cameras = await CameraModel.find(cameraFilter).select("name").lean<{ _id: Types.ObjectId; name: string }[]>();
   const cameraIds = cameras.map((c) => c._id);
@@ -149,9 +149,9 @@ async function loadStatusItems(
 }
 
 export async function getMonitoringStatus(req: Request, siteIdRaw: string): Promise<VisionMonitoringStatusResponse> {
-  const shopId = parseObjectId(siteIdRaw, "siteId");
-  await assertShopAccess(req, shopId.toString());
-  return { checkedAt: new Date().toISOString(), items: await loadStatusItems(shopId) };
+  const siteId = parseObjectId(siteIdRaw, "siteId");
+  await assertSiteAccess(req, siteId.toString());
+  return { checkedAt: new Date().toISOString(), items: await loadStatusItems(siteId) };
 }
 
 export async function setCameraMonitoring(
@@ -160,9 +160,9 @@ export async function setCameraMonitoring(
   enabled: boolean
 ): Promise<VisionCameraMonitoringStatus> {
   const cameraId = parseObjectId(cameraIdRaw, "cameraId");
-  const camera = await CameraModel.findById(cameraId).select("shopId").lean<{ shopId: Types.ObjectId }>();
+  const camera = await CameraModel.findById(cameraId).select("siteId").lean<{ siteId: Types.ObjectId }>();
   if (!camera) throw new AppError(404, "NOT_FOUND", "Camera not found.");
-  await assertShopAccess(req, String(camera.shopId));
+  await assertSiteAccess(req, String(camera.siteId));
 
   // Spec 5.1: monitoring can be enabled only after a successful zone validation.
   if (enabled) {
@@ -181,7 +181,7 @@ export async function setCameraMonitoring(
     { cameraId },
     {
       $set: {
-        shopId: camera.shopId,
+        siteId: camera.siteId,
         enabled,
         ...(enabled ? { enabledAt: now } : { disabledAt: now }),
       },
@@ -196,7 +196,7 @@ export async function setCameraMonitoring(
     { upsert: true }
   );
 
-  const [item] = await loadStatusItems(camera.shopId, cameraId);
+  const [item] = await loadStatusItems(camera.siteId, cameraId);
   return item;
 }
 
@@ -258,8 +258,8 @@ export async function recordWorkerHeartbeat(
 // What the worker needs to run: enabled cameras with active zones. No secrets (stream URL comes from stream-config).
 export async function getWorkerConfig(workerId: string): Promise<VisionWorkerConfig> {
   const monitors = await VisionCameraMonitorModel.find({ enabled: true })
-    .select("shopId cameraId")
-    .lean<{ shopId: Types.ObjectId; cameraId: Types.ObjectId }[]>();
+    .select("siteId cameraId")
+    .lean<{ siteId: Types.ObjectId; cameraId: Types.ObjectId }[]>();
   const cameraIds = monitors.map((m) => m.cameraId);
 
   const zones: ZoneLean[] = cameraIds.length
@@ -280,7 +280,7 @@ export async function getWorkerConfig(workerId: string): Promise<VisionWorkerCon
     cameras: monitors
       .map((m) => ({
         cameraId: String(m.cameraId),
-        siteId: String(m.shopId),
+        siteId: String(m.siteId),
         zones: zonesByCamera.get(String(m.cameraId)) ?? [],
       }))
       .filter((c) => c.zones.length > 0),

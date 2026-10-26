@@ -15,7 +15,7 @@ export function PrivacyCard() {
         ))}
       </ul>
       <p className="mt-3 text-xs text-muted-foreground">
-        This is guidance, not legal advice. You are responsible for following the rules that apply to your shop.
+        This is guidance, not legal advice. You are responsible for following the rules that apply to your site.
       </p>
     </Card>
   );

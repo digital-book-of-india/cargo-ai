@@ -5,7 +5,7 @@ import { apiRequest } from "./client";
 
 export const camerasApi = {
   register: (
-    shopId: string,
+    siteId: string,
     input: {
       name: string;
       protocol: "RTSP" | "ONVIF";
@@ -16,15 +16,15 @@ export const camerasApi = {
       path?: string;
     }
   ) =>
-    apiRequest<{ camera: Camera }>(`/shops/${shopId}/cameras`, {
+    apiRequest<{ camera: Camera }>(`/sites/${siteId}/cameras`, {
       method: "POST",
       body: input,
     }),
 
   // The API answers { items }; { cameras } is accepted too.
-  list: async (shopId: string): Promise<{ cameras: Camera[] }> => {
+  list: async (siteId: string): Promise<{ cameras: Camera[] }> => {
     const res = await apiRequest<{ items?: Camera[]; cameras?: Camera[] }>(
-      `/shops/${shopId}/cameras`
+      `/sites/${siteId}/cameras`
     );
     return { cameras: res.items ?? res.cameras ?? [] };
   },
@@ -51,6 +51,10 @@ export const camerasApi = {
       method: "PATCH",
       body: input,
     }),
+
+  // Moves a camera to another site of the same company.
+  assignSite: (cameraId: string, siteId: string) =>
+    apiRequest<{ camera: Camera }>(`/cameras/${cameraId}/assign-site`, { method: "POST", body: { siteId } }),
 
   delete: (cameraId: string) =>
     apiRequest<{ id?: string; message?: string; success?: boolean }>(`/cameras/${cameraId}`, {

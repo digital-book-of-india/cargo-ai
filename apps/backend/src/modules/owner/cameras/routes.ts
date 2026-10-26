@@ -1,86 +1,101 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { Router, Request, Response } from "express";
 import net from "net";
-import { cameraRegisterSchema, cameraUpdateSchema, zoneSchema } from "@dbi/validation";
-import { CameraModel, ZoneModel, ShopModel } from "../../../models";
-import { authenticate, requireShopAccess, requireCameraAccess } from "../../../middleware/auth";
+import { Types } from "mongoose";
+import { assignCameraSiteSchema, cameraRegisterSchema, cameraUpdateSchema, zoneSchema } from "@dbi/validation";
+import { CameraModel, SiteModel, ZoneModel } from "../../../models";
+import { asyncHandler, guard, requireCameraAccess, requireSiteAccess } from "../../../middleware/auth";
+import { AppError } from "../../../middleware/errorHandler";
+import { cameraControlRateLimiter } from "../../../middleware/rateLimiter";
+import { auditFromRequest } from "../../../services/audit/logger";
+import { canAccessSite, hasAllSiteAccess } from "../../../services/authz/permissions";
 import { encryptSecret, decryptSecret, sanitizeCamera, buildRtspUrl } from "../../../services/secrets/manager";
 
-// Mounted at /api/v1/shops -> /:shopId/cameras
-export const shopCamerasRouter = Router();
-// Mounted at /api/v1/cameras -> /:cameraId/test, /:cameraId, /:cameraId/zones
+// Mounted at /api/v1/sites -> /:siteId/cameras
+export const siteCamerasRouter = Router();
+// Mounted at /api/v1/cameras
 export const cameraRouter = Router();
 
-// POST /api/v1/shops/:shopId/cameras
-shopCamerasRouter.post(
-  "/:shopId/cameras",
-  authenticate,
-  requireShopAccess,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const parseResult = cameraRegisterSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parseResult.error.errors[0]?.message ?? "Invalid camera registration",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
+function formatZone(zone: any) {
+  return {
+    id: zone._id.toString(),
+    cameraId: zone.cameraId.toString(),
+    companyId: zone.companyId.toString(),
+    siteId: zone.siteId.toString(),
+    zoneType: zone.zoneType,
+    polygon: zone.polygon,
+    sensitivity: zone.sensitivity,
+    enabled: zone.enabled,
+  };
+}
 
-      const shop = await ShopModel.findById(req.params.shopId);
-      if (!shop) {
-        res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message: "Shop not found.",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-
-      const { name, protocol, host, port, username, password, path } = parseResult.data;
-      const streamUrl = buildRtspUrl({ protocol, host, port, username, password, path });
-
-      const camera = await CameraModel.create({
-        shopId: shop._id,
-        name,
-        protocol,
-        secretRef: encryptSecret(streamUrl),
-        status: "PENDING_TEST",
-        lastFrameAt: null,
-      });
-
-      res.status(201).json({
-        data: {
-          camera: sanitizeCamera(camera),
-        },
-      });
-    } catch (err) {
-      next(err);
+// POST /api/v1/sites/:siteId/cameras
+siteCamerasRouter.post(
+  "/:siteId/cameras",
+  ...requireSiteAccess("cameras:write"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = cameraRegisterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid camera registration");
     }
-  }
+    const site = req.site!;
+    if (site.status !== "ACTIVE") {
+      throw new AppError(422, "BUSINESS_RULE_FAILED", "Cameras can only be added to an active site.");
+    }
+
+    const { name, protocol, host, port, username, password, path } = parsed.data;
+    const streamUrl = buildRtspUrl({ protocol, host, port, username, password, path });
+
+    const camera = await CameraModel.create({
+      companyId: site.companyId,
+      siteId: site._id,
+      name,
+      protocol,
+      secretRef: encryptSecret(streamUrl),
+      status: "PENDING_TEST",
+      lastFrameAt: null,
+    });
+
+    // Never put the address or credentials in audit metadata.
+    await auditFromRequest(req, "CAMERA_REGISTERED", "Camera", camera._id.toString(), {
+      metadata: { siteId: site._id.toString(), name, protocol },
+    });
+    res.status(201).json({ data: { camera: sanitizeCamera(camera) } });
+  })
 );
 
-// GET /api/v1/shops/:shopId/cameras
-shopCamerasRouter.get(
-  "/:shopId/cameras",
-  authenticate,
-  requireShopAccess,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const cameras = await CameraModel.find({ shopId: req.params.shopId }).sort({ createdAt: -1 });
-      res.json({
-        data: {
-          items: cameras.map(sanitizeCamera),
-        },
-      });
-    } catch (err) {
-      next(err);
+// GET /api/v1/sites/:siteId/cameras
+siteCamerasRouter.get(
+  "/:siteId/cameras",
+  ...requireSiteAccess("cameras:read"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const cameras = await CameraModel.find({
+      companyId: req.tenant!.companyId,
+      siteId: req.site!._id,
+    }).sort({ createdAt: -1 });
+    res.json({ data: { items: cameras.map(sanitizeCamera) } });
+  })
+);
+
+// GET /api/v1/cameras - cameras of the sites this member may access (?siteId= narrows)
+cameraRouter.get(
+  "/",
+  ...guard("cameras:read"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const filter: Record<string, unknown> = { companyId: req.tenant!.companyId };
+    const siteIdParam = typeof req.query.siteId === "string" ? req.query.siteId : undefined;
+
+    if (siteIdParam) {
+      if (!Types.ObjectId.isValid(siteIdParam) || !canAccessSite(req.tenant!.role, req.tenant!.siteIds, siteIdParam)) {
+        throw new AppError(404, "NOT_FOUND", "Site not found.");
+      }
+      filter.siteId = siteIdParam;
+    } else if (!hasAllSiteAccess(req.tenant!.role)) {
+      filter.siteId = { $in: req.tenant!.siteIds };
     }
-  }
+
+    const cameras = await CameraModel.find(filter).sort({ createdAt: -1 }).limit(500);
+    res.json({ data: { items: cameras.map(sanitizeCamera) } });
+  })
 );
 
 // Attempts a real TCP connection to the camera's RTSP host:port.
@@ -123,251 +138,171 @@ async function probeStreamReachability(streamUrl: string): Promise<{ reachable: 
 // POST /api/v1/cameras/:cameraId/test
 cameraRouter.post(
   "/:cameraId/test",
-  authenticate,
-  requireCameraAccess,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const camera = await CameraModel.findById(req.params.cameraId);
-      if (!camera) {
-        res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message: "Camera not found.",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
+  ...requireCameraAccess("cameras:write"),
+  cameraControlRateLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const camera = req.camera!;
+    const streamUrl = decryptSecret(camera.secretRef);
+    const { reachable, errorCode } = streamUrl
+      ? await probeStreamReachability(streamUrl)
+      : { reachable: false, errorCode: "NO_STREAM_URL" };
 
-      const streamUrl = decryptSecret(camera.secretRef);
-      const { reachable, errorCode } = streamUrl
-        ? await probeStreamReachability(streamUrl)
-        : { reachable: false, errorCode: "NO_STREAM_URL" };
+    const now = new Date();
+    camera.status = reachable ? "ONLINE" : "ERROR";
+    camera.lastHealthAt = now;
+    camera.lastErrorCode = reachable ? null : errorCode ?? "UNREACHABLE";
+    if (reachable) camera.lastFrameAt = now;
+    await camera.save();
 
-      const now = new Date();
-      camera.status = reachable ? "ONLINE" : "ERROR";
-      camera.lastHealthAt = now;
-      camera.lastErrorCode = reachable ? null : errorCode ?? "UNREACHABLE";
-      if (reachable) camera.lastFrameAt = now;
-      await camera.save();
-
-      res.json({
-        data: {
-          camera: sanitizeCamera(camera),
-          message: reachable
-            ? "Stream endpoint reachable. Feed marked online."
-            : `Could not reach the camera stream (${camera.lastErrorCode}).`,
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
+    res.json({
+      data: {
+        camera: sanitizeCamera(camera),
+        message: reachable
+          ? "Stream endpoint reachable. Feed marked online."
+          : `Could not reach the camera stream (${camera.lastErrorCode}).`,
+      },
+    });
+  })
 );
 
 // PATCH /api/v1/cameras/:cameraId
 cameraRouter.patch(
   "/:cameraId",
-  authenticate,
-  requireCameraAccess,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const parseResult = cameraUpdateSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parseResult.error.errors[0]?.message ?? "Invalid update payload",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-
-      const camera = await CameraModel.findById(req.params.cameraId);
-      if (!camera) {
-        res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message: "Camera not found.",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-
-      const { name, protocol, host, port, username, password, path } = parseResult.data;
-      if (name) camera.name = name;
-      if (protocol) camera.protocol = protocol;
-      if (host) {
-        const streamUrl = buildRtspUrl({
-          protocol: protocol ?? camera.protocol,
-          host,
-          port,
-          username,
-          password,
-          path,
-        });
-        camera.secretRef = encryptSecret(streamUrl);
-        camera.status = "PENDING_TEST";
-      }
-
-      await camera.save();
-
-      res.json({
-        data: {
-          camera: sanitizeCamera(camera),
-        },
-      });
-    } catch (err) {
-      next(err);
+  ...requireCameraAccess("cameras:write"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = cameraUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid update payload");
     }
-  }
+    const camera = req.camera!;
+
+    const { name, protocol, host, port, username, password, path } = parsed.data;
+    if (name) camera.name = name;
+    if (protocol) camera.protocol = protocol;
+    if (host) {
+      const streamUrl = buildRtspUrl({
+        protocol: protocol ?? camera.protocol,
+        host,
+        port,
+        username,
+        password,
+        path,
+      });
+      camera.secretRef = encryptSecret(streamUrl);
+      camera.status = "PENDING_TEST";
+    }
+    await camera.save();
+
+    await auditFromRequest(req, "CAMERA_UPDATED", "Camera", camera._id.toString(), {
+      metadata: { renamed: Boolean(name), connectionChanged: Boolean(host) },
+    });
+    res.json({ data: { camera: sanitizeCamera(camera) } });
+  })
 );
 
-// PUT /api/v1/cameras/:cameraId/zones
+// POST /api/v1/cameras/:cameraId/assign-site - move a camera to another site of the same company
+cameraRouter.post(
+  "/:cameraId/assign-site",
+  ...requireCameraAccess("cameras:write"),
+  cameraControlRateLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = assignCameraSiteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid site");
+    }
+    const camera = req.camera!;
+    const targetId = parsed.data.siteId;
+
+    // The target must be a site of the caller's own company that the caller may use.
+    const target = Types.ObjectId.isValid(targetId)
+      ? await SiteModel.findOne({ _id: targetId, companyId: req.tenant!.companyId })
+      : null;
+    if (!target || !canAccessSite(req.tenant!.role, req.tenant!.siteIds, target._id.toString())) {
+      throw new AppError(404, "NOT_FOUND", "Site not found.");
+    }
+    if (target.status !== "ACTIVE") {
+      throw new AppError(422, "BUSINESS_RULE_FAILED", "Cameras can only be assigned to an active site.");
+    }
+
+    const fromSiteId = camera.siteId.toString();
+    if (fromSiteId !== target._id.toString()) {
+      camera.siteId = target._id;
+      await camera.save();
+      await ZoneModel.updateMany({ cameraId: camera._id, companyId: camera.companyId }, { siteId: target._id });
+      await auditFromRequest(req, "CAMERA_SITE_ASSIGNED", "Camera", camera._id.toString(), {
+        metadata: { fromSiteId, toSiteId: target._id.toString() },
+      });
+    }
+
+    res.json({ data: { camera: sanitizeCamera(camera) } });
+  })
+);
+
+// PUT /api/v1/cameras/:cameraId/zones  (single shutter-style zone; replaced by /zones in Dev 2's work)
 cameraRouter.put(
   "/:cameraId/zones",
-  authenticate,
-  requireCameraAccess,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const parseResult = zoneSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parseResult.error.errors[0]?.message ?? "Invalid zone definition",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-
-      const camera = await CameraModel.findById(req.params.cameraId);
-      if (!camera) {
-        res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message: "Camera not found.",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-
-      const { zoneType, polygon, sensitivity, enabled } = parseResult.data;
-
-      const zone = await ZoneModel.findOneAndUpdate(
-        { cameraId: camera._id },
-        {
-          cameraId: camera._id,
-          shopId: camera.shopId,
-          zoneType,
-          polygon,
-          sensitivity,
-          enabled,
-        },
-        { upsert: true, new: true }
-      );
-
-      res.json({
-        data: {
-          zone: {
-            id: zone._id.toString(),
-            cameraId: zone.cameraId.toString(),
-            shopId: zone.shopId.toString(),
-            zoneType: zone.zoneType,
-            polygon: zone.polygon,
-            sensitivity: zone.sensitivity,
-            enabled: zone.enabled,
-          },
-        },
-      });
-    } catch (err) {
-      next(err);
+  ...requireCameraAccess("zones:write"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = zoneSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid zone definition");
     }
-  }
+    const camera = req.camera!;
+    const { zoneType, polygon, sensitivity, enabled } = parsed.data;
+
+    const zone = await ZoneModel.findOneAndUpdate(
+      { cameraId: camera._id, companyId: camera.companyId },
+      {
+        cameraId: camera._id,
+        companyId: camera.companyId,
+        siteId: camera.siteId,
+        zoneType,
+        polygon,
+        sensitivity,
+        enabled,
+      },
+      { upsert: true, new: true }
+    );
+
+    await auditFromRequest(req, "ZONE_SAVED", "Zone", zone._id.toString(), {
+      metadata: { cameraId: camera._id.toString(), enabled },
+    });
+    res.json({ data: { zone: formatZone(zone) } });
+  })
 );
 
 // GET /api/v1/cameras/:cameraId/zones
 cameraRouter.get(
   "/:cameraId/zones",
-  authenticate,
-  requireCameraAccess,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const zone = await ZoneModel.findOne({ cameraId: req.params.cameraId });
-      if (!zone) {
-        res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message: "No zone defined for this camera.",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-
-      res.json({
-        data: {
-          zone: {
-            id: zone._id.toString(),
-            cameraId: zone.cameraId.toString(),
-            shopId: zone.shopId.toString(),
-            zoneType: zone.zoneType,
-            polygon: zone.polygon,
-            sensitivity: zone.sensitivity,
-            enabled: zone.enabled,
-          },
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
+  ...requireCameraAccess("zones:read"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const zone = await ZoneModel.findOne({ cameraId: req.camera!._id, companyId: req.camera!.companyId });
+    if (!zone) throw new AppError(404, "NOT_FOUND", "No zone defined for this camera.");
+    res.json({ data: { zone: formatZone(zone) } });
+  })
 );
 
 // DELETE /api/v1/cameras/:cameraId
 cameraRouter.delete(
   "/:cameraId",
-  authenticate,
-  requireCameraAccess,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const camera = await CameraModel.findById(req.params.cameraId);
-      if (!camera) {
-        res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message: "Camera not found.",
-            requestId: req.requestId,
-          },
-        });
-        return;
-      }
-
-      await CameraModel.findByIdAndDelete(camera._id);
-      await ZoneModel.deleteMany({ cameraId: camera._id });
-
-      res.json({
-        data: {
-          id: camera._id.toString(),
-          message: "Camera deleted successfully.",
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
+  ...requireCameraAccess("cameras:write"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const camera = req.camera!;
+    await CameraModel.deleteOne({ _id: camera._id, companyId: camera.companyId });
+    await ZoneModel.deleteMany({ cameraId: camera._id, companyId: camera.companyId });
+    await auditFromRequest(req, "CAMERA_DELETED", "Camera", camera._id.toString(), {
+      metadata: { siteId: camera.siteId.toString(), name: camera.name },
+    });
+    res.json({ data: { id: camera._id.toString(), message: "Camera deleted successfully." } });
+  })
 );
 
 // GET /api/v1/cameras/:cameraId/preview
-// Returns a frame preview or SVG test card for zone alignment & live monitoring
+// Returns an SVG test card used as the backdrop of the zone editor. It is a PLACEHOLDER, not a real frame:
+// it must never be presented as live video (see CONTEXT_DEV1.md, open items).
 cameraRouter.get(
   "/:cameraId/preview",
-  authenticate,
-  requireCameraAccess,
+  ...requireCameraAccess("cameras:read"),
   async (req: Request, res: Response) => {
     // Generate clean 16:9 SVG test card frame with timestamp & camera ID
     const timeStr = new Date().toISOString();
@@ -378,7 +313,7 @@ cameraRouter.get(
         <line x1="640" y1="0" x2="640" y2="720" stroke="#334155" stroke-width="2" stroke-dasharray="8 8"/>
         <circle cx="640" cy="360" r="100" fill="none" stroke="#38bdf8" stroke-width="2"/>
         <text x="640" y="340" fill="#f8fafc" font-size="28" font-family="sans-serif" font-weight="600" text-anchor="middle">CAMERA PREVIEW FEED</text>
-        <text x="640" y="380" fill="#94a3b8" font-size="18" font-family="sans-serif" text-anchor="middle">ID: ${req.params.cameraId}</text>
+        <text x="640" y="380" fill="#94a3b8" font-size="18" font-family="sans-serif" text-anchor="middle">ID: ${req.camera!._id.toString()}</text>
         <text x="640" y="680" fill="#64748b" font-size="16" font-family="monospace" text-anchor="middle">${timeStr}</text>
       </svg>
     `.trim();

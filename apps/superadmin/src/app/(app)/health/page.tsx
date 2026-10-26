@@ -102,7 +102,7 @@ export default function HealthPage() {
             <thead className="bg-[#EFF6FF] text-[#0F172A] font-semibold border-b border-[#DBEAFE]">
               <tr>
                 <th className="py-3.5 px-4">Camera Name</th>
-                <th className="py-3.5 px-4">Shop</th>
+                <th className="py-3.5 px-4">Site</th>
                 <th className="py-3.5 px-4">Protocol</th>
                 <th className="py-3.5 px-4">Effective Status</th>
                 <th className="py-3.5 px-4">Last Frame Received</th>
@@ -124,13 +124,13 @@ export default function HealthPage() {
                   <tr key={cam.cameraId} className="hover:bg-gray-50">
                     <td className="py-3.5 px-4 font-semibold text-gray-900">
                       {cam.name}
-                      {(cam.demoFlag || cam.shopName.includes("[DEMO]") || cam.name.includes("[DEMO]")) && (
+                      {(cam.demoFlag || cam.siteName.includes("[DEMO]") || cam.name.includes("[DEMO]")) && (
                         <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
                           DEMO
                         </span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 text-gray-700">{cam.shopName}</td>
+                    <td className="py-3.5 px-4 text-gray-700">{cam.siteName}</td>
                     <td className="py-3.5 px-4 font-mono text-xs font-semibold text-gray-500">{cam.protocol}</td>
                     <td className="py-3.5 px-4">
                       <span

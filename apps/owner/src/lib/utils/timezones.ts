@@ -1,4 +1,4 @@
-// IANA timezone helpers for the shop form.
+// IANA timezone helpers for the site form.
 
 export interface TimezoneOption {
   value: string;

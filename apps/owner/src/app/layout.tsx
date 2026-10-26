@@ -7,7 +7,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "DBI Intelligence",
-  description: "After-hours shutter and gate monitoring for shop owners.",
+  description: "AI cargo and shipment monitoring for warehouses.",
 };
 
 export const viewport: Viewport = {

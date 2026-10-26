@@ -3,7 +3,8 @@ import { CameraStatus } from "@dbi/api-types";
 
 export interface ICameraDocument extends Document {
   _id: Types.ObjectId;
-  shopId: Types.ObjectId;
+  companyId: Types.ObjectId;
+  siteId: Types.ObjectId;
   name: string;
   protocol: "RTSP" | "ONVIF";
   secretRef: string;
@@ -17,7 +18,8 @@ export interface ICameraDocument extends Document {
 
 const cameraSchema = new Schema<ICameraDocument>(
   {
-    shopId: { type: Schema.Types.ObjectId, ref: "Shop", required: true, index: true },
+    companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true, index: true },
+    siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
     name: { type: String, required: true, trim: true },
     protocol: { type: String, enum: ["RTSP", "ONVIF"], required: true },
     secretRef: { type: String, required: true },

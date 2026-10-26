@@ -4,7 +4,8 @@ import { ZoneType, ZoneSensitivity, Point } from "@dbi/api-types";
 export interface IZoneDocument extends Document {
   _id: Types.ObjectId;
   cameraId: Types.ObjectId;
-  shopId: Types.ObjectId;
+  companyId: Types.ObjectId;
+  siteId: Types.ObjectId;
   zoneType: ZoneType;
   polygon: Point[];
   sensitivity: ZoneSensitivity;
@@ -23,7 +24,8 @@ const pointSchema = new Schema(
 const zoneSchema = new Schema<IZoneDocument>(
   {
     cameraId: { type: Schema.Types.ObjectId, ref: "Camera", required: true, index: true },
-    shopId: { type: Schema.Types.ObjectId, ref: "Shop", required: true, index: true },
+    companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true, index: true },
+    siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
     zoneType: {
       type: String,
       enum: ["SHUTTER", "GATE", "ENTRANCE", "CUSTOM"],

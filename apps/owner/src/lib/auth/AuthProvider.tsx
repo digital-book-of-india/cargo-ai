@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
 import { authApi } from "@/lib/api/auth";
 import { ApiError, setUnauthorizedHandler } from "@/lib/api/client";
 import { clearOwnerStorage } from "@/lib/utils/storage";
-import type { User } from "@/types";
+import { can as roleCan, canAccessSite } from "@/types";
+import type { CompanyMembership, CompanyRole, Permission, User } from "@/types";
 
 // loading: checking the session | error: could not check (server/network down)
 type Status = "loading" | "authenticated" | "unauthenticated" | "error";
@@ -18,8 +19,18 @@ interface AuthContextValue {
   sessionExpired: boolean;
   /** true right after the owner chose to sign out (no "come back to this page" needed) */
   signedOutByUser: boolean;
+  /** the companies this user belongs to (usually one) */
+  memberships: CompanyMembership[];
+  /** the company the panel is working in */
+  membership: CompanyMembership | null;
+  role: CompanyRole | null;
+  /** does the active role allow this? Used to hide controls the API would refuse. */
+  can: (permission: Permission) => boolean;
+  /** same, for one site (members of some roles only reach the sites they are assigned to) */
+  canAtSite: (permission: Permission, siteId: string) => boolean;
   login: (input: { email: string; password: string }) => Promise<void>;
-  register: (input: { name: string; email: string; password: string }) => Promise<void>;
+  register: (input: { name: string; email: string; password: string; companyName?: string }) => Promise<void>;
+  acceptInvitation: (input: { token: string; name: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   /** re-check the session (used for "Try again" after an error) */
   refresh: () => Promise<void>;
@@ -32,12 +43,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [user, setUser] = useState<User | null>(null);
+  const [memberships, setMemberships] = useState<CompanyMembership[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [signedOutByUser, setSignedOutByUser] = useState(false);
 
-  const signedIn = useCallback((u: User) => {
+  const signedIn = useCallback((u: User, m: CompanyMembership[]) => {
     setUser(u);
+    setMemberships(m);
     setError(null);
     setSessionExpired(false);
     setSignedOutByUser(false);
@@ -46,14 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signedOut = useCallback(() => {
     setUser(null);
+    setMemberships([]);
     setStatus("unauthenticated");
   }, []);
 
   const refresh = useCallback(async () => {
     setStatus("loading");
     try {
-      const { user: u } = await authApi.me();
-      signedIn(u);
+      const me = await authApi.me();
+      signedIn(me.user, me.memberships);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         signedOut();
@@ -81,28 +95,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (input: { email: string; password: string }) => {
-      const { user: u } = await authApi.login(input);
-      signedIn(u);
+      const res = await authApi.login(input);
+      signedIn(res.user, res.memberships);
     },
     [signedIn]
   );
 
   const register = useCallback(
-    async (input: { name: string; email: string; password: string }) => {
+    async (input: { name: string; email: string; password: string; companyName?: string }) => {
       const res = await authApi.register(input);
-      try {
-        // Some backends register without opening a session: confirm it.
-        const { user: u } = await authApi.me();
-        signedIn(u);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
-          await login({ email: input.email, password: input.password });
-        } else {
-          signedIn(res.user);
-        }
-      }
+      signedIn(res.user, res.memberships);
     },
-    [login, signedIn]
+    [signedIn]
+  );
+
+  const acceptInvitation = useCallback(
+    async (input: { token: string; name: string; password: string }) => {
+      const res = await authApi.acceptInvitation(input);
+      signedIn(res.user, res.memberships);
+    },
+    [signedIn]
   );
 
   const logout = useCallback(async () => {
@@ -111,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // The user asked to leave: clear the local session even if the call failed.
     }
-    // a shared device must not show the previous owner's shop or zone markers
+    // a shared device must not show the previous owner's site or zone markers
     clearOwnerStorage();
     setSignedOutByUser(true);
     setSessionExpired(false);
@@ -120,9 +132,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUser = useCallback((u: User) => setUser(u), []);
 
+  const membership = memberships[0] ?? null;
+  const role = membership?.role ?? null;
+  const can = useCallback((permission: Permission) => roleCan(role, permission), [role]);
+  const canAtSite = useCallback(
+    (permission: Permission, siteId: string) =>
+      role !== null && roleCan(role, permission) && canAccessSite(role, membership?.siteIds ?? [], siteId),
+    [role, membership]
+  );
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, error, sessionExpired, signedOutByUser, login, register, logout, refresh, updateUser }),
-    [status, user, error, sessionExpired, signedOutByUser, login, register, logout, refresh, updateUser]
+    () => ({
+      status,
+      user,
+      error,
+      sessionExpired,
+      signedOutByUser,
+      memberships,
+      membership,
+      role,
+      can,
+      canAtSite,
+      login,
+      register,
+      acceptInvitation,
+      logout,
+      refresh,
+      updateUser,
+    }),
+    [status, user, error, sessionExpired, signedOutByUser, memberships, membership, role, can, canAtSite, login, register, acceptInvitation, logout, refresh, updateUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

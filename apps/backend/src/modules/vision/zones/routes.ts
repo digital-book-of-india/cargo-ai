@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { saveVisionZoneSchema, updateVisionZoneSchema } from "@dbi/validation";
-import { authenticate } from "../../../middleware/auth";
+import { authenticate, resolveTenant } from "../../../middleware/auth";
 import { AppError } from "../../../middleware/errorHandler";
 import { asyncHandler, parseLimit, parseOrThrow } from "../shared/http";
 import {
@@ -16,7 +16,7 @@ import {
 // Mounted at /api/v1/zones (spec section 7)
 export const visionZonesRouter = Router();
 
-visionZonesRouter.use(authenticate);
+visionZonesRouter.use(authenticate, resolveTenant);
 
 // GET /api/v1/zones?siteId=...&cameraId=...&cursor=...&limit=...
 visionZonesRouter.get(

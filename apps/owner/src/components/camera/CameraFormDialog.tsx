@@ -34,7 +34,7 @@ export interface CameraFormValues {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  shopId: string;
+  siteId: string;
   /** set when editing an existing camera */
   camera?: Camera;
   onSubmit: (values: CameraFormValues) => Promise<void>;
@@ -42,7 +42,7 @@ interface Props {
 
 // Add or edit a camera. The address is never shown back: when editing, leaving it blank keeps
 // the stored one. Form state is cleared whenever the dialog closes.
-export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit }: Props) {
+export function CameraFormDialog({ open, onOpenChange, siteId, camera, onSubmit }: Props) {
   const editing = !!camera;
   const [name, setName] = useState("");
   const [protocol, setProtocol] = useState<"RTSP" | "ONVIF">("RTSP");
@@ -69,7 +69,7 @@ export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit 
     setFormError(null);
     setSubmitting(false);
     setConsent(false);
-  }, [open, camera, shopId]);
+  }, [open, camera, siteId]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -138,7 +138,7 @@ export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit 
             <DialogDescription>
               {editing
                 ? "Change the name or give a new address. A new address must be tested again."
-                : "Use the camera that watches your shutter or gate."}
+                : "Use the camera that watches this site."}
             </DialogDescription>
           </DialogHeader>
 
@@ -147,7 +147,7 @@ export function CameraFormDialog({ open, onOpenChange, shopId, camera, onSubmit 
           <div className="space-y-4">
             <TextField
               label="Camera name"
-              placeholder="Front shutter camera"
+              placeholder="Loading bay camera"
               value={name}
               onChange={(e) => setName(e.target.value)}
               error={errors.name}

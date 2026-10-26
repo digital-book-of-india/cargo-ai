@@ -1,9 +1,9 @@
 import type { Request } from "express";
 import { Types } from "mongoose";
 import type { VisionCountLedgerRow, VisionCountSummaryRow, VisionCountTotals } from "@dbi/api-types";
-import { ShopModel, VisionCountLedgerModel, type IVisionCountLedgerDocument } from "../../../models";
+import { SiteModel, VisionCountLedgerModel, type IVisionCountLedgerDocument } from "../../../models";
 import { AppError } from "../../../middleware/errorHandler";
-import { assertShopAccess } from "../shared/access";
+import { assertSiteAccess } from "../shared/access";
 import { parseObjectId } from "../shared/http";
 
 export type SummaryGroupBy = "zone" | "camera" | "day" | "shift";
@@ -22,7 +22,7 @@ interface MatchInput extends DateRange {
 
 function matchStage(input: MatchInput): Record<string, unknown> {
   const match: Record<string, unknown> = {
-    shopId: parseObjectId(input.siteId, "siteId"),
+    siteId: parseObjectId(input.siteId, "siteId"),
     occurredAt: { $gte: input.from, $lt: input.to },
   };
   if (input.zoneId) match.zoneId = parseObjectId(input.zoneId, "zoneId");
@@ -65,10 +65,10 @@ export async function countSummary(
   req: Request,
   input: DateRange & { siteId: string; groupBy: SummaryGroupBy }
 ): Promise<{ groupBy: SummaryGroupBy; items: VisionCountSummaryRow[] }> {
-  const shopId = parseObjectId(input.siteId, "siteId");
-  await assertShopAccess(req, shopId.toString());
+  const siteId = parseObjectId(input.siteId, "siteId");
+  await assertSiteAccess(req, siteId.toString());
 
-  const shop = await ShopModel.findById(shopId).select("timezone").lean();
+  const shop = await SiteModel.findById(siteId).select("timezone").lean();
   if (!shop) throw new AppError(404, "NOT_FOUND", "Site not found.");
 
   const tz = shop.timezone || "Asia/Kolkata";
@@ -117,7 +117,7 @@ function toLedgerRow(doc: IVisionCountLedgerDocument): VisionCountLedgerRow {
   return {
     id: String(doc._id),
     eventKey: doc.eventKey,
-    siteId: String(doc.shopId),
+    siteId: String(doc.siteId),
     cameraId: String(doc.cameraId),
     zoneId: String(doc.zoneId),
     trackId: doc.trackId,
@@ -140,10 +140,10 @@ export async function listLedger(
     limit: number;
   }
 ): Promise<{ items: VisionCountLedgerRow[]; nextCursor: string | null }> {
-  const shopId = parseObjectId(input.siteId, "siteId");
-  await assertShopAccess(req, shopId.toString());
+  const siteId = parseObjectId(input.siteId, "siteId");
+  await assertSiteAccess(req, siteId.toString());
 
-  const filter: Record<string, any> = { shopId };
+  const filter: Record<string, any> = { siteId };
   if (input.zoneId) filter.zoneId = parseObjectId(input.zoneId, "zoneId");
   if (input.cameraId) filter.cameraId = parseObjectId(input.cameraId, "cameraId");
   if (input.direction) filter.direction = input.direction;

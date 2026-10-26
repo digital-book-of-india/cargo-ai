@@ -2,18 +2,31 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import { env } from "./config/env";
-import { errorHandler } from "./middleware/errorHandler";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { requestId } from "./middleware/requestId";
 import { serviceAuth } from "./middleware/serviceAuth";
-import { authRouter } from "./modules/auth/routes";
-import { shopsRouter } from "./modules/owner/shops/routes";
-import { shopCamerasRouter, cameraRouter } from "./modules/owner/cameras/routes";
-import { shopEventsRouter, eventRouter } from "./modules/owner/events/routes";
+import { ingestRateLimiter } from "./middleware/rateLimiter";
+import { authRouter, meRouter } from "./modules/auth/routes";
+import { companyRouter } from "./modules/company/routes";
+import { sitesRouter } from "./modules/sites/routes";
+import { usersRouter } from "./modules/users/routes";
+import { siteCamerasRouter, cameraRouter } from "./modules/owner/cameras/routes";
+import { siteEventsRouter, eventRouter } from "./modules/owner/events/routes";
 import { notificationsRouter } from "./modules/owner/notifications/routes";
+import mongoose from "mongoose";
+import { requestLogger } from "./middleware/requestLogger";
+import { serviceAuth as internalServiceAuth } from "./middleware/serviceAuth";
+import { collectGauges, renderPrometheus } from "./services/observability/metrics";
+import { getEvidenceStorage } from "./services/evidence/storage";
+import { reportsRouter } from "./modules/reports/routes";
+import { auditRouter } from "./modules/audit/routes";
+import { adminSupportRouter } from "./modules/superadmin/support/routes";
+import { aiEventsRouter } from "./modules/internal/ai-events/routes";
+import { vehiclesRouter, manifestsRouter, loadingSessionsRouter } from "./modules/shipments/routes";
 import { evidenceRouter } from "./modules/evidence/routes";
 import { adminOverviewRouter } from "./modules/superadmin/overview/routes";
-import { adminOwnersRouter } from "./modules/superadmin/owners/routes";
-import { adminShopsRouter } from "./modules/superadmin/shops/routes";
+import { adminCompaniesRouter } from "./modules/superadmin/companies/routes";
+import { adminSitesRouter } from "./modules/superadmin/sites/routes";
 import { adminHealthRouter } from "./modules/superadmin/health/routes";
 import { adminAuditLogsRouter } from "./modules/superadmin/audit-logs/routes";
 import { aiHealthRouter } from "./modules/internal/ai-health/routes";
@@ -27,8 +40,10 @@ import { visionMonitoringRouter } from "./modules/vision/monitoring/routes";
 import { visionWorkerRouter } from "./modules/vision/monitoring/worker-routes";
 export const app = express();
 
-// 1. Assign unique requestId to every incoming request
+// 1. Assign unique UUID requestId to every incoming request
+app.set("trust proxy", env.trustProxy);
 app.use(requestId);
+app.use(requestLogger);
 
 // Security headers + a conservative CSP (evidence images/clips are same-origin signed links).
 app.use(
@@ -51,9 +66,13 @@ app.use(
 
 // 2. Multi-origin CORS configuration (Port 3000 & Port 3001)
 const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001",
-  ...env.corsOrigins,
+  // the local panels are only trusted outside production
+  ...(env.nodeEnv === "production" ? [] : ["http://localhost:3000", "http://localhost:3001"]),
+  ...(Array.isArray(env.corsOrigins)
+    ? env.corsOrigins
+    : env.corsOrigins
+    ? String(env.corsOrigins).split(",").map((s) => s.trim())
+    : []),
 ];
 
 const corsOptions: cors.CorsOptions = {
@@ -76,7 +95,7 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-request-id", "x-service-token", "Idempotency-Key"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-request-id", "x-service-token", "x-company-id", "Idempotency-Key"],
   exposedHeaders: ["x-request-id"],
   optionsSuccessStatus: 204,
 };
@@ -85,39 +104,77 @@ const corsOptions: cors.CorsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// 3. Body Parser (small limit: ingestion payloads are tiny; evidence goes through multipart upload)
-app.use(express.json({ limit: "100kb" }));
+// 3. Body Parser
+app.use(express.json({ limit: env.bodyLimit }));
 
 // 4. Health Check
+// Liveness: the process answers. Readiness: it can also do its job (database up, evidence storage usable).
 app.get("/health", (_req, res) => {
   res.json({ data: { status: "ok" } });
+});
+app.get("/health/ready", async (_req, res) => {
+  const database = mongoose.connection.readyState === 1;
+  let storage = true;
+  try {
+    await getEvidenceStorage().exists("health-check-probe");
+  } catch {
+    storage = false;
+  }
+  const ready = database && storage;
+  res.status(ready ? 200 : 503).json({ data: { status: ready ? "ready" : "not_ready", checks: { database, evidenceStorage: storage } } });
 });
 
 // 5. Primary v1 API Router
 const v1 = express.Router();
 v1.use("/auth", authRouter);
-v1.use("/shops", shopsRouter);
-v1.use("/shops", shopCamerasRouter);
+v1.use("/me", meRouter);
+v1.use("/company", companyRouter);
+v1.use("/sites", sitesRouter);
+v1.use("/sites", siteCamerasRouter);
+v1.use("/sites", siteEventsRouter);
+v1.use("/users", usersRouter);
 v1.use("/cameras", cameraRouter);
-v1.use("/shops", shopEventsRouter);
 v1.use("/events", eventRouter);
 v1.use("/notifications", notificationsRouter);
 v1.use("/evidence", evidenceRouter);
-v1.use("/zones", visionZonesRouter); // Dev 2
-v1.use("/counts", visionCountsRouter); // Dev 2
-v1.use("/monitoring", visionMonitoringRouter); // Dev 2
+v1.use("/zones", visionZonesRouter); // zones (AI pipeline work)
+v1.use("/counts", visionCountsRouter); // counting ledger summaries
+v1.use("/monitoring", visionMonitoringRouter); // per-camera monitoring status
+v1.use("/reports", reportsRouter);
+v1.use("/audit-logs", auditRouter);
+v1.use("/vehicles", vehiclesRouter);
+v1.use("/manifests", manifestsRouter);
+v1.use("/loading-sessions", loadingSessionsRouter);
+// The AI pipeline posts events here with the service token (same handler as /internal/v1/ai/events).
+v1.use("/ai/events", serviceAuth, ingestRateLimiter, aiEventsRouter);
+
 // Dev 2 Super Admin Endpoints
 v1.use("/admin/overview", adminOverviewRouter);
-v1.use("/admin/owners", adminOwnersRouter);
-v1.use("/admin/shops", adminShopsRouter);
+v1.use("/admin/companies", adminCompaniesRouter);
+v1.use("/admin/sites", adminSitesRouter);
 v1.use("/admin/cameras/health", adminHealthRouter);
 v1.use("/admin/audit-logs", adminAuditLogsRouter);
+v1.use("/admin/support", adminSupportRouter);
 
 // 6. Service-auth internal router (AI worker)
 const internal = express.Router();
 internal.use(serviceAuth);
-internal.use("/ai/events", visionIngestRouter); // Dev 2: Appendix A ingestion
-internal.use("/monitoring", visionWorkerRouter); // Dev 2: worker heartbeat & config
+// The AI worker's gateway: Appendix A events, counting ledger, alert events forwarded to the inbox.
+internal.use("/ai/events", visionIngestRouter);
+internal.use("/monitoring", visionWorkerRouter); // worker heartbeat and config
+// Cargo events straight into the inbox (same handler as /api/v1/ai/events).
+internal.use("/ai/cargo-events", ingestRateLimiter, aiEventsRouter);
+// Metrics for the monitoring system (service token required). ?format=json for people.
+internal.get("/metrics", internalServiceAuth, async (req, res, next) => {
+  try {
+    const gauges = await collectGauges();
+    if (req.query.format === "json") return void res.json({ data: { gauges } });
+    res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+    res.send(renderPrometheus(gauges));
+  } catch (err) {
+    next(err);
+  }
+});
 internal.use("/ai/health", aiHealthRouter);
 internal.use("/cameras", internalCamerasRouter);
 internal.use("/evidence", evidenceUploadRouter);
@@ -125,5 +182,6 @@ internal.use("/evidence", evidenceUploadRouter);
 app.use("/api/v1", v1);
 app.use("/internal/v1", internal);
 
-// 7. Global Error Handler
+// 7. Unknown routes, then the global error handler
+app.use(notFoundHandler);
 app.use(errorHandler);

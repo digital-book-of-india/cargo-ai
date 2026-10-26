@@ -1,3 +1,7 @@
+// Safe browser storage helpers. Storage can be missing or blocked, so every call is guarded.
+//
+// Keys are scoped to the backend the app talks to, so ids from one environment can never be
+// mistaken for another's.
 import { API_BASE_URL } from "@/lib/api/client";
 
 function scopeName(): string {
@@ -30,7 +34,7 @@ function purgeLegacyKeys(): void {
     const ls = window.localStorage;
     for (const k of Object.keys(ls)) {
       const legacy =
-        k === "dbi-current-shop" || k === "dbi-zone-saved" || (k.startsWith("dbi-zone-copy:") && !k.includes("@"));
+        k === "dbi-current-site" || k === "dbi-zone-saved" || (k.startsWith("dbi-zone-copy:") && !k.includes("@"));
       if (legacy) ls.removeItem(k);
     }
   } catch {
@@ -56,15 +60,15 @@ export function writeJson(key: string, value: unknown): void {
   }
 }
 
-const CURRENT_SHOP_KEY = "dbi-current-shop";
+const CURRENT_SHOP_KEY = "dbi-current-site";
 const ZONE_KEY = "dbi-zone-saved";
 const ZONE_COPY_PREFIX = "dbi-zone-copy:";
 
-export function getStoredShopId(): string | null {
+export function getStoredSiteId(): string | null {
   return readJson<string | null>(CURRENT_SHOP_KEY, null);
 }
 
-export function setStoredShopId(id: string): void {
+export function setStoredSiteId(id: string): void {
   writeJson(CURRENT_SHOP_KEY, id);
 }
 
@@ -92,6 +96,8 @@ export function setStoredZone(cameraId: string, zone: StoredZone): void {
   writeJson(ZONE_COPY_PREFIX + cameraId, zone);
 }
 
+// Removes everything this app remembered in the browser for the signed-in owner (selected site,
+// zone markers and copies). The demo database of the mock layer is kept.
 export function clearOwnerStorage(): void {
   try {
     if (typeof window === "undefined") return;

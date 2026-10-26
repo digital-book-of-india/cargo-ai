@@ -50,7 +50,7 @@ export function LoginForm() {
     <form onSubmit={onSubmit} noValidate className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-3xl font-semibold tracking-tight">Welcome back</h1>
-        <p className="text-base text-muted-foreground">Sign in to check your monitoring status.</p>
+        <p className="text-base text-muted-foreground">Sign in to check your site&apos;s monitoring status.</p>
       </div>
 
       {expired && <Alert tone="warning">Your session expired. Please sign in again.</Alert>}
@@ -61,7 +61,7 @@ export function LoginForm() {
           label="Email"
           type="email"
           autoComplete="email"
-          placeholder="you@yourshop.com"
+          placeholder="you@yoursite.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           error={errors.email}
@@ -90,6 +90,7 @@ export function LoginForm() {
           Create an account
         </Link>
       </p>
+
     </form>
   );
 }

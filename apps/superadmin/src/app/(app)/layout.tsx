@@ -42,7 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           return;
         }
 
-        if (fetchedUser.role !== "SUPER_ADMIN") {
+        if (fetchedUser.role !== "PLATFORM_ADMIN") {
           router.replace("/access-denied");
           return;
         }
@@ -68,11 +68,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navLinks = [
     { name: "Overview", href: "/overview" },
-    { name: "Shops", href: "/shops" },
-    { name: "Owners", href: "/owners" },
+    { name: "Companies", href: "/companies" },
+    { name: "Sites", href: "/sites" },
     { name: "Camera & AI Health", href: "/health" },
     { name: "Audit Logs", href: "/audit-logs" },
-    { name: "Platform Settings", href: "/settings" },
   ];
 
   if (authChecking) {
@@ -129,7 +128,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <div className="flex items-center space-x-4">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#DBEAFE]">
-              {user?.role ?? "SUPER_ADMIN"}
+              {user?.role ?? "PLATFORM_ADMIN"}
             </span>
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-sm">

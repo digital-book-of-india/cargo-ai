@@ -3,21 +3,26 @@ import { env } from "../../config/env";
 
 export type EvidenceKind = "snapshot" | "clip";
 
-interface EvidenceTokenPayload {
-  eventId: string;
+export interface EvidenceTokenPayload {
+  eventId: string; // the event's database id
   kind: EvidenceKind;
+  cid: string; // company the link was issued for
+  uid?: string; // user the link was issued to (recorded in the access audit)
 }
 
-const EVIDENCE_URL_TTL_SECONDS = 10 * 60; // short-lived, access-controlled link
-
-export function signEvidenceUrl(eventId: string, kind: EvidenceKind): { url: string; expiresAt: string } {
-  const expiresAt = new Date(Date.now() + EVIDENCE_URL_TTL_SECONDS * 1000);
-  const token = jwt.sign({ eventId, kind } as EvidenceTokenPayload, env.jwtAccessSecret, {
-    expiresIn: EVIDENCE_URL_TTL_SECONDS,
-  });
+// A link is issued only after the caller was authorised for the event. It is short-lived and
+// bound to one event, one kind of file and one company.
+export function signEvidenceUrl(
+  eventId: string,
+  kind: EvidenceKind,
+  who: { companyId: string; userId?: string },
+  ttlSeconds: number = env.evidenceSignedUrlTtlSeconds
+): { url: string; expiresAt: string } {
+  const payload: EvidenceTokenPayload = { eventId, kind, cid: who.companyId, uid: who.userId };
+  const token = jwt.sign(payload, env.jwtAccessSecret, { expiresIn: ttlSeconds });
   return {
     url: `/api/v1/evidence/${encodeURIComponent(eventId)}/${kind}?token=${token}`,
-    expiresAt: expiresAt.toISOString(),
+    expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
   };
 }
 
@@ -25,6 +30,6 @@ export function verifyEvidenceToken(token: string): EvidenceTokenPayload | null 
   try {
     return jwt.verify(token, env.jwtAccessSecret) as EvidenceTokenPayload;
   } catch {
-    return null;
+    return null; // expired, tampered or malformed
   }
 }

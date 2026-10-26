@@ -1,0 +1,349 @@
+openapi: 3.0.3
+info:
+  title: DBI Intelligence API
+  version: 0.1.0
+  description: |
+    REST API of DBI Intelligence, AI Cargo & Shipment Security.
+
+    **Conventions**
+    - Success: `{ "data": ..., "meta": { "requestId": "..." } }`. Errors: `{ "error": { "code", "message", "requestId" } }`.
+    - The company is taken from the signed-in user's membership, never from a request body. Another
+      company's data answers `404`, never `403`. Optional `X-Company-Id` picks one of several memberships.
+    - Lists use opaque cursors: pass `nextCursor` back as `cursor`. Page size is capped at 100.
+    - Times are ISO 8601 in UTC. Reports and exports also give the site's local time.
+    - Every route in the running server must appear in this file (a unit test checks it).
+servers:
+  - url: http://localhost:4000
+tags:
+  - { name: Auth }
+  - { name: Company }
+  - { name: Sites }
+  - { name: Users }
+  - { name: Cameras }
+  - { name: Events }
+  - { name: Notifications }
+  - { name: Shipments }
+  - { name: Reports }
+  - { name: Audit }
+  - { name: Admin, description: "Platform administrators only" }
+  - { name: Internal, description: "Service-to-service (x-service-token)" }
+  - { name: Operations }
+components:
+  securitySchemes:
+    cookieAuth: { type: apiKey, in: cookie, name: dbi_token, description: "Set by login. Also accepted as `Authorization: Bearer <token>`." }
+    bearerAuth: { type: http, scheme: bearer }
+    serviceToken: { type: apiKey, in: header, name: x-service-token, description: "Shared secret of the AI worker and monitoring." }
+    signedLink: { type: apiKey, in: query, name: token, description: "Short-lived link issued with an event's detail view." }
+  parameters:
+    Cursor: { name: cursor, in: query, schema: { type: string }, description: "`nextCursor` of the previous page." }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+    SiteId: { name: siteId, in: path, required: true, schema: { type: string } }
+    CameraId: { name: cameraId, in: path, required: true, schema: { type: string } }
+    EventId: { name: eventId, in: path, required: true, schema: { type: string } }
+    From: { name: from, in: query, schema: { type: string, format: date-time } }
+    To: { name: to, in: query, schema: { type: string, format: date-time } }
+    ReportSite: { name: siteId, in: query, schema: { type: string } }
+    ReportType: { name: eventType, in: query, schema: { type: string } }
+    ReportShift: { name: shift, in: query, schema: { type: string }, description: "Name of a shift from company settings; applied in each site's own time zone." }
+  responses:
+    Ok: { description: "Success. Body is `{ data, meta }`." }
+    BadRequest: { description: "Validation error (`VALIDATION_ERROR`)." }
+    Unauthorized: { description: "Not signed in or token invalid (`UNAUTHORIZED`)." }
+    Forbidden: { description: "The role lacks the permission (`FORBIDDEN`), or the company is suspended (`COMPANY_SUSPENDED`)." }
+    NotFound: { description: "Not found, or belongs to another company or site (`NOT_FOUND`)." }
+    Conflict: { description: "Duplicate or invalid state change (`CONFLICT`)." }
+    TooMany: { description: "Rate limited (`RATE_LIMITED`); see Retry-After." }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties: { code: { type: string }, message: { type: string }, requestId: { type: string } }
+    EventAiSubmission:
+      type: object
+      required: [eventKey, siteId, cameraId, eventType, occurredAt]
+      description: Appendix A of the requirements. Unknown fields are rejected.
+      properties:
+        eventKey: { type: string, maxLength: 200, description: "Idempotency key, unique per company." }
+        siteId: { type: string }
+        cameraId: { type: string }
+        zoneId: { type: string }
+        eventType: { type: string, enum: [package_detected, package_crossing_in, package_crossing_out, count_mismatch, restricted_zone_movement, after_hours_activity, unusual_loading_activity, package_removed, camera_offline, ai_service_unavailable, tamper_suspected] }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        summary: { type: string }
+        occurredAt: { type: string, format: date-time }
+        payload: { type: object }
+        evidence: { type: object, properties: { snapshotObjectKey: { type: string }, clipObjectKey: { type: string } } }
+    ManifestInput:
+      type: object
+      required: [reference, siteId, expectedPackageCount]
+      properties:
+        reference: { type: string, maxLength: 100, description: "Letters, numbers, space and - _ . / only." }
+        siteId: { type: string }
+        expectedPackageCount: { type: integer, minimum: 0, maximum: 1000000 }
+        notes: { type: string, maxLength: 1000 }
+    SessionInput:
+      type: object
+      required: [siteId, direction]
+      properties:
+        siteId: { type: string }
+        manifestId: { type: string, description: "Must be an active manifest of the same site." }
+        vehicleId: { type: string }
+        zoneId: { type: string }
+        direction: { type: string, enum: [inbound, outbound] }
+        startedAt: { type: string, format: date-time }
+security:
+  - cookieAuth: []
+paths:
+  /health:
+    get: { tags: [Operations], summary: "Liveness probe", security: [], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /health/ready:
+    get: { tags: [Operations], summary: "Readiness probe (database and evidence storage)", security: [], responses: { "200": { description: "Ready" }, "503": { description: "Not ready" } } }
+  /internal/v1/metrics:
+    get:
+      tags: [Operations]
+      summary: Prometheus metrics (request counts, 5xx, event lag, notification queue depth)
+      security: [{ serviceToken: [] }]
+      parameters: [{ name: format, in: query, schema: { type: string, enum: [json] } }]
+      responses: { "200": { description: "Metrics" }, "401": { $ref: "#/components/responses/Unauthorized" } }
+
+  /api/v1/auth/register:
+    post: { tags: [Auth], summary: "Create a company and its owner", security: [], responses: { "201": { $ref: "#/components/responses/Ok" }, "400": { $ref: "#/components/responses/BadRequest" }, "409": { $ref: "#/components/responses/Conflict" }, "429": { $ref: "#/components/responses/TooMany" } } }
+  /api/v1/auth/login:
+    post: { tags: [Auth], summary: "Sign in (sets the session cookie)", security: [], responses: { "200": { $ref: "#/components/responses/Ok" }, "401": { $ref: "#/components/responses/Unauthorized" }, "429": { $ref: "#/components/responses/TooMany" } } }
+  /api/v1/auth/logout:
+    post: { tags: [Auth], summary: "Sign out", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/auth/accept-invitation:
+    post: { tags: [Auth], summary: "Join a company with an invitation token (single use)", security: [], responses: { "201": { $ref: "#/components/responses/Ok" }, "400": { $ref: "#/components/responses/BadRequest" }, "429": { $ref: "#/components/responses/TooMany" } } }
+  /api/v1/auth/me:
+    get: { tags: [Auth], summary: "The signed-in user", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    patch: { tags: [Auth], summary: "Change own name or password", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/me:
+    get: { tags: [Auth], summary: "The signed-in user with memberships and role", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+
+  /api/v1/company:
+    get: { tags: [Company], summary: "The company (company:read)", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    patch: { tags: [Company], summary: "Change name or time zone (company:update, audited)", responses: { "200": { $ref: "#/components/responses/Ok" }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/company/settings:
+    get: { tags: [Company], summary: "Operating settings with defaults filled in (every member)", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    patch:
+      tags: [Company]
+      summary: "Change mismatch tolerance, evidence retention, default confidence, shifts, notification rules (settings:write, audited with before and after)"
+      responses: { "200": { $ref: "#/components/responses/Ok" }, "400": { $ref: "#/components/responses/BadRequest" }, "403": { $ref: "#/components/responses/Forbidden" } }
+
+  /api/v1/sites:
+    get: { tags: [Sites], summary: "Sites the member may access (sites:read)", parameters: [{ name: includeArchived, in: query, schema: { type: boolean } }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    post: { tags: [Sites], summary: "Create a site (sites:write, audited)", responses: { "201": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/sites/{siteId}:
+    parameters: [{ $ref: "#/components/parameters/SiteId" }]
+    get: { tags: [Sites], summary: "One site", responses: { "200": { $ref: "#/components/responses/Ok" }, "404": { $ref: "#/components/responses/NotFound" } } }
+    patch: { tags: [Sites], summary: "Change a site (sites:write, audited)", responses: { "200": { $ref: "#/components/responses/Ok" }, "404": { $ref: "#/components/responses/NotFound" } } }
+    delete: { tags: [Sites], summary: "Archive a site that has no cameras or zones", responses: { "200": { $ref: "#/components/responses/Ok" }, "422": { description: "Site still has cameras or zones" } } }
+
+  /api/v1/users:
+    get: { tags: [Users], summary: "Company members (users:read - owners and admins)", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/users/invitations:
+    post: { tags: [Users], summary: "Invite a person with a role and sites (users:manage, audited)", responses: { "201": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/users/{userId}/role:
+    patch: { tags: [Users], summary: "Change a member's role or sites (audited; an admin cannot grant ownership)", parameters: [{ name: userId, in: path, required: true, schema: { type: string } }], responses: { "200": { $ref: "#/components/responses/Ok" }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/users/{userId}/status:
+    patch: { tags: [Users], summary: "Disable or re-enable a member (audited; the last owner cannot be disabled)", parameters: [{ name: userId, in: path, required: true, schema: { type: string } }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+
+  /api/v1/cameras:
+    get: { tags: [Cameras], summary: "Cameras the member may access", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/sites/{siteId}/cameras:
+    parameters: [{ $ref: "#/components/parameters/SiteId" }]
+    get: { tags: [Cameras], summary: "Cameras of a site (with effectiveStatus and isStale)", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    post: { tags: [Cameras], summary: "Add a camera (cameras:write); the password is encrypted and never returned", responses: { "201": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/cameras/{cameraId}:
+    parameters: [{ $ref: "#/components/parameters/CameraId" }]
+    patch: { tags: [Cameras], summary: "Change a camera", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    delete: { tags: [Cameras], summary: "Remove a camera", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/cameras/{cameraId}/test:
+    post: { tags: [Cameras], summary: "Test reachability (does not prove video is flowing)", parameters: [{ $ref: "#/components/parameters/CameraId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "429": { $ref: "#/components/responses/TooMany" } } }
+  /api/v1/cameras/{cameraId}/preview:
+    get: { tags: [Cameras], summary: "SVG test card used as the zone editor backdrop. A placeholder, NOT a real frame: never present it as live video (cameras:read)", parameters: [{ $ref: "#/components/parameters/CameraId" }], responses: { "200": { description: image/svg+xml }, "404": { $ref: "#/components/responses/NotFound" } } }
+  /api/v1/cameras/{cameraId}/assign-site:
+    post: { tags: [Cameras], summary: "Move a camera to another site of the same company", parameters: [{ $ref: "#/components/parameters/CameraId" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/cameras/{cameraId}/zones:
+    parameters: [{ $ref: "#/components/parameters/CameraId" }]
+    get: { tags: [Cameras], summary: "The camera's zone", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    put: { tags: [Cameras], summary: "Save the camera's zone (zones:write)", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+
+  /api/v1/events:
+    get:
+      tags: [Events]
+      summary: Events for the sites the member may see
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, acknowledged, in_review, resolved, false_positive, escalated] } }
+        - { name: severity, in: query, schema: { type: string } }
+        - { name: eventType, in: query, schema: { type: string } }
+        - { name: assignedTo, in: query, schema: { type: string }, description: '"me" or a user id' }
+        - { name: cameraId, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/From" }
+        - { $ref: "#/components/parameters/To" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses: { "200": { $ref: "#/components/responses/Ok" } }
+  /api/v1/events/summary:
+    get: { tags: [Events], summary: "Counts by status and severity", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/sites/{siteId}/events:
+    get: { tags: [Events], summary: "Events of one site", parameters: [{ $ref: "#/components/parameters/SiteId" }, { $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/events/{eventId}:
+    get: { tags: [Events], summary: "Event detail with history, notes and short-lived evidence links", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "404": { $ref: "#/components/responses/NotFound" } } }
+  /api/v1/events/{eventId}/assignees:
+    get: { tags: [Events], summary: "Members who may be assigned this event", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/events/{eventId}/acknowledge:
+    post: { tags: [Events], summary: "open -> acknowledged (events:review)", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/events/{eventId}/resolve:
+    post: { tags: [Events], summary: "Resolve with an outcome (reviewed_no_issue, confirmed_operational, escalated)", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/events/{eventId}/false-positive:
+    post: { tags: [Events], summary: "Mark as a false positive", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/events/{eventId}/notes:
+    post: { tags: [Events], summary: "Add a note", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/events/{eventId}/assign:
+    post: { tags: [Events], summary: "Assign to a reviewer with access to the site (null unassigns)", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/events/{eventId}/reopen:
+    post: { tags: [Events], summary: "Reopen a resolved event with a reason (events:reopen)", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/evidence/{eventId}/{kind}:
+    get:
+      tags: [Events]
+      summary: Stream a snapshot or clip with a signed, expiring link (QA-09). Every access is audited.
+      security: [{ signedLink: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/EventId" }
+        - { name: kind, in: path, required: true, schema: { type: string, enum: [snapshot, clip] } }
+      responses: { "200": { description: "The file" }, "401": { $ref: "#/components/responses/Unauthorized" }, "404": { $ref: "#/components/responses/NotFound" } }
+
+  /api/v1/notifications:
+    get: { tags: [Notifications], summary: "The caller's own notifications with an unread count", parameters: [{ name: unread, in: query, schema: { type: boolean } }, { $ref: "#/components/parameters/Limit" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/notifications/unread-count:
+    get: { tags: [Notifications], summary: "Unread count for the menu badge", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/notifications/read-all:
+    post: { tags: [Notifications], summary: "Mark all of the caller's notifications read", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/notifications/{id}/read:
+    post: { tags: [Notifications], summary: "Mark one read", parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { "200": { $ref: "#/components/responses/Ok" }, "404": { $ref: "#/components/responses/NotFound" } } }
+
+  /api/v1/vehicles:
+    get: { tags: [Shipments], summary: "Vehicles (manifests:read)", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    post: { tags: [Shipments], summary: "Register a vehicle (manifests:write; the plate is upper-cased, duplicates refused)", responses: { "201": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/vehicles/{vehicleId}:
+    patch: { tags: [Shipments], summary: "Change a vehicle's label or mark it not in use", parameters: [{ name: vehicleId, in: path, required: true, schema: { type: string } }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/manifests:
+    get: { tags: [Shipments], summary: "Manifests for the member's sites", parameters: [{ name: siteId, in: query, schema: { type: string } }, { name: status, in: query, schema: { type: string } }, { name: q, in: query, schema: { type: string }, description: "Reference prefix" }, { $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    post:
+      tags: [Shipments]
+      summary: "Create a manifest (manifests:write, audited)"
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ManifestInput" } } } }
+      responses: { "201": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } }
+  /api/v1/manifests/import:
+    post:
+      tags: [Shipments]
+      summary: Import manifests from CSV text (columns reference, siteCode, expectedPackageCount, notes)
+      description: "All-or-nothing unless `allowPartial` is true. Row errors carry line numbers. The same file (by hash) is never imported twice; the stored result is returned with `duplicate`. Limit 1 MB / 5000 rows."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties: { fileName: { type: string }, content: { type: string }, allowPartial: { type: boolean } }
+      responses: { "200": { description: "Import job with status COMPLETED, PARTIAL or FAILED" }, "413": { description: "File too large" }, "429": { $ref: "#/components/responses/TooMany" } }
+  /api/v1/manifests/{manifestId}:
+    parameters: [{ name: manifestId, in: path, required: true, schema: { type: string } }]
+    get: { tags: [Shipments], summary: "One manifest", responses: { "200": { $ref: "#/components/responses/Ok" }, "404": { $ref: "#/components/responses/NotFound" } } }
+    patch: { tags: [Shipments], summary: "Change count or notes, or cancel (not while a session is open)", responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/loading-sessions:
+    get: { tags: [Shipments], summary: "Loading sessions", parameters: [{ name: siteId, in: query, schema: { type: string } }, { name: open, in: query, schema: { type: boolean } }, { name: reconciliationStatus, in: query, schema: { type: string } }, { $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    post:
+      tags: [Shipments]
+      summary: Start a loading session (one open session per manifest)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SessionInput" } } } }
+      responses: { "201": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } }
+  /api/v1/loading-sessions/{sessionId}:
+    get: { tags: [Shipments], summary: "One session (with the count so far while open)", parameters: [{ name: sessionId, in: path, required: true, schema: { type: string } }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/loading-sessions/{sessionId}/close:
+    post:
+      tags: [Shipments]
+      summary: Close a session, count, compare with the manifest, create one count_mismatch event if it differs
+      description: Observed = crossings in the session's own direction (the other direction is stored, never subtracted). matched when the difference is within the company tolerance, review_required otherwise, closed_unverified when there is no manifest or no count.
+      parameters: [{ name: sessionId, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } }
+
+  /api/v1/reports/cargo-activity:
+    get:
+      tags: [Reports]
+      summary: "Events per day (in each site's time zone), by type and site, loading session totals and coverage gaps (reports:read)"
+      parameters: [{ $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }, { $ref: "#/components/parameters/ReportSite" }, { name: cameraId, in: query, schema: { type: string } }, { name: zoneId, in: query, schema: { type: string } }, { $ref: "#/components/parameters/ReportType" }, { $ref: "#/components/parameters/ReportShift" }]
+      responses: { "200": { $ref: "#/components/responses/Ok" }, "400": { $ref: "#/components/responses/BadRequest" } }
+  /api/v1/reports/mismatches:
+    get: { tags: [Reports], summary: "Closed sessions whose count needs review, with the alert status (reports:read)", parameters: [{ $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }, { $ref: "#/components/parameters/ReportSite" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/reports/events/export:
+    get:
+      tags: [Reports]
+      summary: "CSV export of events (reports:export, audited, same site access as the event list)"
+      description: Up to 10,000 rows; more is refused with 413 rather than cut. Spreadsheet formulas are neutralised.
+      parameters: [{ $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }, { $ref: "#/components/parameters/ReportSite" }, { $ref: "#/components/parameters/ReportType" }, { $ref: "#/components/parameters/ReportShift" }]
+      responses: { "200": { description: "text/csv attachment" }, "413": { description: "Too many rows" }, "429": { $ref: "#/components/responses/TooMany" } }
+
+  /api/v1/audit-logs:
+    get: { tags: [Audit], summary: "The company's audit trail (audit:read - owners, admins, auditors)", parameters: [{ name: action, in: query, schema: { type: string } }, { name: targetType, in: query, schema: { type: string } }, { name: actorUserId, in: query, schema: { type: string } }, { $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }, { $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+
+  /api/v1/admin/overview:
+    get: { tags: [Admin], summary: "Platform KPIs", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/admin/companies:
+    get: { tags: [Admin], summary: "Companies with site and member counts", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/admin/companies/{companyId}/status:
+    patch: { tags: [Admin], summary: "Suspend or reactivate a company; a reason of at least 5 characters is required and audited", parameters: [{ name: companyId, in: path, required: true, schema: { type: string } }], responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+  /api/v1/admin/sites:
+    get: { tags: [Admin], summary: "Sites across companies", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/admin/sites/{siteId}/status:
+    patch: { tags: [Admin], summary: "Activate or deactivate a site with a reason", parameters: [{ $ref: "#/components/parameters/SiteId" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/admin/cameras/health:
+    get: { tags: [Admin], summary: "Camera health across companies", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/admin/audit-logs:
+    get: { tags: [Admin], summary: "Audit trail across companies", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /api/v1/admin/support/evidence-link:
+    post:
+      tags: [Admin]
+      summary: Support access to one evidence file; needs a reason of at least 10 characters, expires in 2 minutes, and is written to the owning company's audit trail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [eventId, kind, reason], properties: { eventId: { type: string }, kind: { type: string, enum: [snapshot, clip] }, reason: { type: string, minLength: 10 } } }
+      responses: { "200": { $ref: "#/components/responses/Ok" }, "400": { $ref: "#/components/responses/BadRequest" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } }
+
+  /api/v1/ai/events:
+    post:
+      tags: [Internal]
+      summary: Submit a cargo event (same handler as /internal/v1/ai/cargo-events)
+      security: [{ serviceToken: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/EventAiSubmission" } } } }
+      responses: { "201": { description: "Created" }, "200": { description: "Already recorded (same eventKey)" }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" } }
+  /internal/v1/ai/cargo-events:
+    post:
+      tags: [Internal]
+      summary: Submit a cargo event straight into the review inbox (idempotent by eventKey; company derived from the site). The AI worker uses /internal/v1/ai/events (docs/vision/openapi.yaml), which also feeds the count ledger and forwards alert events here.
+      security: [{ serviceToken: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/EventAiSubmission" } } } }
+      responses: { "201": { description: "Created" }, "200": { description: "Already recorded" }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" } }
+  /internal/v1/ai/health:
+    post: { tags: [Internal], summary: "AI worker heartbeat", security: [{ serviceToken: [] }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /internal/v1/cameras:
+    get: { tags: [Internal], summary: "Cameras the worker should process", security: [{ serviceToken: [] }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /internal/v1/cameras/{cameraId}/stream-config:
+    get: { tags: [Internal], summary: "Stream address and zone for one camera (credentials decrypted for the worker only)", security: [{ serviceToken: [] }], parameters: [{ $ref: "#/components/parameters/CameraId" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+  /internal/v1/evidence/upload:
+    post:
+      tags: [Internal]
+      summary: Upload a snapshot or clip (multipart). The server picks the storage key; type, size and file content are checked.
+      security: [{ serviceToken: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, required: [siteId, cameraId, file], properties: { siteId: { type: string }, cameraId: { type: string }, file: { type: string, format: binary } } }
+      responses: { "201": { description: "Stored; returns objectKey" }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" } }

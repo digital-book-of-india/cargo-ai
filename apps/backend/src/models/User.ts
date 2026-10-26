@@ -19,9 +19,9 @@ const userSchema = new Schema<IUserDocument>(
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ["SUPER_ADMIN", "SHOP_OWNER", "SHOP_STAFF"],
+      enum: ["PLATFORM_ADMIN", "USER"],
       required: true,
-      default: "SHOP_OWNER",
+      default: "USER",
     },
     status: {
       type: String,

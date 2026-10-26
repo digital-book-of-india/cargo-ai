@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/common/Brand";
-import { ShopSwitcher } from "@/components/shop/ShopSwitcher";
-import { useShop } from "@/lib/shop/ShopProvider";
+import { SiteSwitcher } from "@/components/site/SiteSwitcher";
+import { useSite } from "@/lib/site/SiteProvider";
 import { cn } from "@/lib/utils/cn";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { useUnreadCount } from "@/hooks/useUnreadCount";
 import { buildNav, isActive } from "./nav";
 import type { NavItem } from "./nav";
 import { UserMenu } from "./UserMenu";
@@ -27,7 +29,14 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
         aria-hidden
       />
       {item.label}
-      {active && <span aria-hidden className="ml-auto h-5 w-1 rounded-full bg-primary" />}
+      {item.badge ? (
+        <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+          {item.badge > 99 ? "99+" : item.badge}
+          <span className="sr-only"> unread</span>
+        </span>
+      ) : (
+        active && <span aria-hidden className="ml-auto h-5 w-1 rounded-full bg-primary" />
+      )}
     </Link>
   );
 }
@@ -51,8 +60,10 @@ function Group({ title, items, pathname }: { title?: string; items: NavItem[]; p
 // Desktop sidebar (md and up). Phones use MobileTopbar + MobileTabs instead.
 export function Sidebar() {
   const pathname = usePathname();
-  const { current } = useShop();
-  const nav = buildNav(current?.id ?? null);
+  const { current } = useSite();
+  const { can } = useAuth();
+  const { count: unread } = useUnreadCount();
+  const nav = buildNav(current?.id ?? null, { users: can("users:read"), audit: can("audit:read"), unread });
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-background md:flex">
@@ -60,11 +71,11 @@ export function Sidebar() {
         <Brand />
       </div>
       <div className="px-3 pb-2">
-        <ShopSwitcher />
+        <SiteSwitcher />
       </div>
       <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-3">
         <Group items={nav.main} pathname={pathname} />
-        <Group title="Your shop" items={nav.shop} pathname={pathname} />
+        <Group title="Your site" items={nav.site} pathname={pathname} />
         <Group title="Account" items={nav.account} pathname={pathname} />
       </nav>
       <div className="border-t p-3">

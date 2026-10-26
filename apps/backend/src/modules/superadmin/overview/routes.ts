@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { requireAdmin, adminRateLimiter, sendSuccess, sendError, AuthenticatedAdminRequest } from "../../../middleware/adminAuth";
-import { ShopModel, CameraModel, EventModel, AuditLogModel, AiWorkerHealthModel } from "../../../models";
+import { CompanyModel, SiteModel, CameraModel, CargoEventModel, AuditLogModel, AiWorkerHealthModel } from "../../../models";
 import { computeEffectiveCameraStatus, getAiWorkerHealthSnapshot } from "../../../utils/adminHelpers";
 
 export const adminOverviewRouter = Router();
@@ -16,10 +16,12 @@ adminOverviewRouter.get("/", async (req: Request, res: Response) => {
     const workerStaleThreshold = Number(process.env.WORKER_STALE_SECONDS ?? 60);
 
     // 1. KPI Counts
-    const [totalShops, activeShops, suspendedShops] = await Promise.all([
-      ShopModel.countDocuments().catch(() => 0),
-      ShopModel.countDocuments({ status: "ACTIVE" }).catch(() => 0),
-      ShopModel.countDocuments({ status: "SUSPENDED" }).catch(() => 0),
+    const [totalCompanies, suspendedCompanies, totalSites, activeSites, inactiveSites] = await Promise.all([
+      CompanyModel.countDocuments().catch(() => 0),
+      CompanyModel.countDocuments({ status: "SUSPENDED" }).catch(() => 0),
+      SiteModel.countDocuments({ status: { $ne: "ARCHIVED" } }).catch(() => 0),
+      SiteModel.countDocuments({ status: "ACTIVE" }).catch(() => 0),
+      SiteModel.countDocuments({ status: "INACTIVE" }).catch(() => 0),
     ]);
 
     // 2. Truthful Platform Camera Online Calculation
@@ -40,7 +42,7 @@ adminOverviewRouter.get("/", async (req: Request, res: Response) => {
     const cameraOnlineRate = totalCameras > 0 ? Math.round((onlineCameras / totalCameras) * 100) : null;
 
     // 4. Unreviewed Alerts
-    const unreviewedAlerts = await EventModel.countDocuments({ reviewStatus: "NEW" }).catch(() => 0);
+    const unreviewedAlerts = await CargoEventModel.countDocuments({ status: "open" }).catch(() => 0);
 
     // 5. Worker Status
     const aiWorker = await getAiWorkerHealthSnapshot(AiWorkerHealthModel, workerStaleThreshold);
@@ -48,19 +50,21 @@ adminOverviewRouter.get("/", async (req: Request, res: Response) => {
     // 6. Recent 5 Events (Populate with safe fallback)
     let recentEvents: any[] = [];
     try {
-      const recentEventsRaw = await EventModel.find()
-        .sort({ startedAt: -1 })
+      const recentEventsRaw = await CargoEventModel.find()
+        .sort({ occurredAt: -1 })
         .limit(5)
-        .populate("shopId", "name")
+        .populate("siteId", "name")
         .lean();
 
       recentEvents = (recentEventsRaw || []).map((ev: any) => ({
-        eventId: ev.eventId,
-        shopName: ev.shopId?.name || "Unknown Shop",
+        eventId: String(ev._id),
+        siteName: ev.siteId?.name || "Unknown Site",
         eventType: ev.eventType,
-        startedAt: ev.startedAt ? new Date(ev.startedAt).toISOString() : null,
-        reviewStatus: ev.reviewStatus,
-        demoFlag: Boolean(ev.demoFlag),
+        occurredAt: ev.occurredAt ? new Date(ev.occurredAt).toISOString() : null,
+        severity: ev.severity,
+        status: ev.status,
+        summary: ev.summary,
+        demoFlag: Boolean(ev.demo),
       }));
     } catch {
       recentEvents = [];
@@ -93,9 +97,11 @@ adminOverviewRouter.get("/", async (req: Request, res: Response) => {
       res,
       {
         kpis: {
-          totalShops,
-          activeShops,
-          suspendedShops,
+          totalCompanies,
+          suspendedCompanies,
+          totalSites,
+          activeSites,
+          inactiveSites,
           totalCameras,
           onlineCameras,
           cameraOnlineRate,

@@ -32,8 +32,8 @@ export async function ingestVisionEvent(
   }
 
   // Tenant checks use the database only. input.companyId is never used for authorization.
-  const camera = await CameraModel.findById(input.cameraId).select("shopId").lean();
-  if (!camera || String(camera.shopId) !== input.siteId) {
+  const camera = await CameraModel.findById(input.cameraId).select("siteId").lean();
+  if (!camera || String(camera.siteId) !== input.siteId) {
     throw new AppError(404, "NOT_FOUND", "Camera not found for this site.");
   }
 
@@ -59,8 +59,8 @@ export async function ingestVisionEvent(
 }
 
 async function loadEnabledZone(zoneId: string, cameraId: string, siteId: string): Promise<LoadedZone> {
-  const zone = await VisionZoneModel.findById(zoneId).select("shopId cameraId status rules").lean();
-  if (!zone || String(zone.cameraId) !== cameraId || String(zone.shopId) !== siteId) {
+  const zone = await VisionZoneModel.findById(zoneId).select("siteId cameraId status rules").lean();
+  if (!zone || String(zone.cameraId) !== cameraId || String(zone.siteId) !== siteId) {
     throw new AppError(404, "NOT_FOUND", "Zone not found for this camera.");
   }
   if (zone.status !== "active") {
@@ -106,7 +106,7 @@ async function writeEventAndCount(
   zone: LoadedZone | null
 ): Promise<void> {
   const decision = await decideCount(input, zone);
-  const shopId = new Types.ObjectId(input.siteId);
+  const siteId = new Types.ObjectId(input.siteId);
   const cameraId = new Types.ObjectId(input.cameraId);
   const zoneId = zone ? new Types.ObjectId(zone.id) : null;
 
@@ -118,7 +118,7 @@ async function writeEventAndCount(
           {
             eventKey: input.eventKey,
             payloadHash,
-            shopId,
+            siteId,
             cameraId,
             zoneId,
             eventType: input.eventType as VisionEventType,
@@ -144,7 +144,7 @@ async function writeEventAndCount(
           [
             {
               eventKey: input.eventKey,
-              shopId,
+              siteId,
               cameraId,
               zoneId,
               trackId: input.track.trackId,

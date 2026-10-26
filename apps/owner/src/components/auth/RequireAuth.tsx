@@ -48,27 +48,13 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (status === "unauthenticated" || !user) return null; // redirecting to /login
 
-  if (user.role === "SUPER_ADMIN") {
+  if (user.role === "PLATFORM_ADMIN") {
     return (
       <div className="mx-auto max-w-md space-y-3 p-6">
-        <h1 className="text-lg font-semibold">This is the shop owner panel</h1>
+        <h1 className="text-lg font-semibold">This is the company panel</h1>
         <p className="text-sm text-slate-600">
           You are signed in as a platform admin. Use the Super Admin panel instead, or sign in
-          with a shop owner account.
-        </p>
-        <Button variant="secondary" onClick={() => void logout()}>
-          Sign out
-        </Button>
-      </div>
-    );
-  }
-
-  if (user.role !== "SHOP_OWNER") {
-    return (
-      <div className="mx-auto max-w-md space-y-3 p-6">
-        <h1 className="text-lg font-semibold">This account cannot use the owner panel</h1>
-        <p className="text-sm text-slate-600">
-          The owner panel is for shop owners. Please sign in with the shop owner account.
+          with a company account.
         </p>
         <Button variant="secondary" onClick={() => void logout()}>
           Sign out

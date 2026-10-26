@@ -1,10 +1,10 @@
 # DBI Intelligence - Owner web (Dev 1)
 
-Shop owners register, connect a CCTV camera, draw a shutter zone and see
+Company users register a company, add sites (warehouses), connect CCTV cameras and review
 alerts. Next.js 14 (App Router) + TypeScript + Tailwind + shadcn-style components.
 
-This app only shows what the API reports. It never claims a shop is protected unless the API
-says `MONITORING` and the answer is fresh. Everything served by the mock layer is labelled DEMO.
+This app only shows what the API reports. It never claims a site is protected when a camera or the AI worker is offline.
+There is no mock data: every screen reads the real backend and database.
 
 ## Run
 
@@ -12,10 +12,8 @@ says `MONITORING` and the answer is fresh. Everything served by the mock layer i
     npm install
 
     cd apps/owner
-    cp .env.example .env.local     # mocks on by default
+    cp .env.example .env.local     # set NEXT_PUBLIC_API_BASE_URL to the running backend
     npm run dev                    # http://localhost:3000
-
-Demo sign in (mock layer only): `owner@demo.test` / `Demo@1234`.
 
 Other scripts: `npm run lint`, `npm run test`, `npm run typecheck`, `npm run build`.
 
@@ -23,7 +21,6 @@ Other scripts: `npm run lint`, `npm run test`, `npm run typecheck`, `npm run bui
 
 | Name | Default | Purpose |
 |---|---|---|
-| `NEXT_PUBLIC_USE_MOCKS` | `true` in `.env.example` | `true` uses the in-browser demo API. Set `false` for the real backend. |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:4000/api/v1` | Backend base URL (cookie session, `credentials: include`). |
 | `NEXT_PUBLIC_REQUEST_TIMEOUT_MS` | `20000` | Per-request timeout. |
 | `NEXT_PUBLIC_CAMERA_REFRESH_MS` | `15000` | Camera status refresh while the Cameras page is visible. |
@@ -37,32 +34,36 @@ All of these are public (shipped to the browser). Never put a secret in a `NEXT_
 | Route | What it does |
 |---|---|
 | `/login`, `/register` | Sign in / create account |
-| `/onboarding` | Setup checklist (shop, hours, camera, test, zone) |
+| `/onboarding` | First-run page for a user with no site yet |
 | `/dashboard` | Camera health and latest alerts |
-| `/shops/new`, `/shops/:id` | Create and edit a shop |
-| `/shops/:id/cameras` | Add/edit a camera, connection test, live status |
-| `/shops/:id/cameras/:cameraId/zone` | Draw the shutter zone (0..1 polygon) |
-| `/shops/:id/alerts`, `/shops/:id/alerts/:eventId` | Alerts list, evidence viewer, review |
+| `/sites/new`, `/sites/:id` | Create and edit a site |
+| `/sites/:id/cameras` | Add/edit a camera, connection test, live status |
+| `/sites/:id/cameras/:cameraId/zone` | Draw the shutter zone (0..1 polygon) |
+| `/sites/:id/alerts`, `/sites/:id/alerts/:eventId` | Alerts list, evidence viewer, review |
 | `/notifications` | What we told you, delivery status |
-| `/settings` | Profile |
+| `/sites`, `/sites/new`, `/sites/:id` | Sites list (deactivate, archive), add a site, site profile |
+| `/users` | Users and roles: invite people, change role and site access |
+| `/accept-invitation?token=` | Join a company from an invitation link |
+| `/settings` | Profile, company, operating settings (tolerance, evidence retention, shifts, notification rules) |
 
 ## Rules the UI follows
 
 - "Monitoring" (protected) only for a fresh `MONITORING` answer; stale, failed or unknown answers read "Status unavailable".
 - The camera address and password are only typed into a password field, never shown back, never logged, never stored in the browser or put in a URL.
 - Evidence addresses are only used as `src` of an image or video.
-- Times are shown in the shop's time zone (the API sends UTC).
+- Times are shown in the site's time zone (the API sends UTC).
 - Owner-facing wording is conservative: a camera cannot guarantee detection of everything.
-- On sign out the app forgets the selected shop, zone markers for this browser.
+- On sign out the app forgets the selected site, zone markers for this browser.
 
-## Testing without the backend
+## Testing
 
-The mock layer (`src/mocks`) implements every owner endpoint with DEMO data and the honest status
-rules. Camera addresses containing `offline`, `error` or `slow` change the mock test outcome.
+`npm run test` runs the unit tests. Backend behaviour (tenant isolation, roles, invitations) is covered by the
+integration tests in `apps/backend` (`npm run test:int -w @dbi/backend`), which use a throw-away database.
 
 ## Status and known gaps
 
-All owner screens are built and verified against local mock responses and an automated unit test suite (`npm run test`). Live end-to-end integration against the real backend is pending startup resolution.
+The panel is being converted from the single-shop product to companies and sites. Screens for sites, users and
+roles, the event inbox, manifests and reports are still to be built (see `CONTEXT_DEV1.md`).
 
 Accessibility: DOM audit passes (names, labels, one `h1`, skip link, focus ring, reduced motion,
 AA contrast for the design tokens). Not yet done: screen-reader pass and keyboard walkthrough on a

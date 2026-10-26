@@ -1,4 +1,11 @@
-import type { CameraStatus } from "@/types";
+import type { Camera, CameraStatus } from "@/types";
+
+/** What the screen shows: the stored status, corrected for how recently the camera reported. */
+export type DisplayStatus = CameraStatus | "DEGRADED";
+
+export function displayStatus(camera: Pick<Camera, "status" | "effectiveStatus">): DisplayStatus {
+  return camera.effectiveStatus ?? camera.status;
+}
 
 // Pure camera helpers. Host, username and password are only ever sent to the API as
 // discrete fields: the UI never builds or displays a raw rtsp://user:pass@host URL.
@@ -27,11 +34,14 @@ export function checkPort(raw: string): PortCheck {
   return { ok: true, value: n };
 }
 
-export const TEST_RESULT_MESSAGE: Record<CameraStatus, string> = {
-  PENDING_TEST: "Waiting for the monitoring service to test this camera.",
-  ONLINE: "The camera is sending video.",
-  OFFLINE: "We could not reach the camera. Check that it is on and the address is right.",
-  ERROR: "The camera answered with an error. Check the address, username and password.",
+// A connection test only proves the camera's address can be reached. It does not prove that
+// pictures are flowing, so the wording never says the camera is "sending video".
+export const TEST_RESULT_MESSAGE: Record<DisplayStatus, string> = {
+  PENDING_TEST: "This camera has not been tested yet. Run a connection test.",
+  ONLINE: "The last connection test reached the camera.",
+  DEGRADED: "This camera has not reported recently, so it is not shown as online. Run a connection test.",
+  OFFLINE: "No recent report from this camera, so it is not shown as online. Check that it is on, then run a connection test.",
+  ERROR: "The camera did not answer the last test. Check the address, username and password.",
 };
 
 // "3 minutes ago" style text for lastFrameAt.

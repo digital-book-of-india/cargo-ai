@@ -2,19 +2,21 @@ import { Badge } from "@/components/ui/Badge";
 import type { BadgeTone } from "@/components/ui/Badge";
 import type {
   CameraStatus,
-  EventType,
-  ReviewStatus,
-  ShopStatus,
+  CargoEventSeverity,
+  CargoEventStatus,
+  CargoEventType,
+  SiteStatus,
 } from "@/types";
 
-const camera: Record<CameraStatus, { label: string; tone: BadgeTone }> = {
+const camera: Record<CameraStatus | "DEGRADED", { label: string; tone: BadgeTone }> = {
   PENDING_TEST: { label: "Not tested yet", tone: "neutral" },
   ONLINE: { label: "Online", tone: "success" },
+  DEGRADED: { label: "Not reporting", tone: "warning" },
   OFFLINE: { label: "Offline", tone: "danger" },
   ERROR: { label: "Error", tone: "danger" },
 };
 
-export function CameraStatusBadge({ status }: { status: CameraStatus }) {
+export function CameraStatusBadge({ status }: { status: CameraStatus | "DEGRADED" }) {
   const c = camera[status];
   return (
     <Badge tone={c.tone} dot>
@@ -23,26 +25,40 @@ export function CameraStatusBadge({ status }: { status: CameraStatus }) {
   );
 }
 
-const review: Record<ReviewStatus, { label: string; tone: BadgeTone }> = {
-  NEW: { label: "New", tone: "primary" },
-  REVIEWED: { label: "Reviewed", tone: "neutral" },
-  FALSE_ALARM: { label: "False alarm", tone: "neutral" },
-  CONFIRMED: { label: "Confirmed", tone: "warning" },
+const eventStatus: Record<CargoEventStatus, { label: string; tone: BadgeTone }> = {
+  open: { label: "Open", tone: "primary" },
+  acknowledged: { label: "Acknowledged", tone: "neutral" },
+  in_review: { label: "In review", tone: "neutral" },
+  resolved: { label: "Resolved", tone: "success" },
+  false_positive: { label: "False alarm", tone: "neutral" },
+  escalated: { label: "Escalated", tone: "warning" },
 };
 
-export function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
-  const r = review[status];
+export function EventStatusBadge({ status }: { status: CargoEventStatus }) {
+  const r = eventStatus[status];
   return <Badge tone={r.tone}>{r.label}</Badge>;
 }
 
-const shop: Record<ShopStatus, { label: string; tone: BadgeTone }> = {
-  PENDING_SETUP: { label: "Setup pending", tone: "warning" },
-  ACTIVE: { label: "Active", tone: "success" },
-  SUSPENDED: { label: "Suspended", tone: "danger" },
+const severity: Record<CargoEventSeverity, { label: string; tone: BadgeTone }> = {
+  low: { label: "Low", tone: "neutral" },
+  medium: { label: "Medium", tone: "warning" },
+  high: { label: "High", tone: "danger" },
+  critical: { label: "Critical", tone: "danger" },
 };
 
-export function ShopStatusBadge({ status }: { status: ShopStatus }) {
-  const s = shop[status];
+export function SeverityBadge({ severity: level }: { severity: CargoEventSeverity }) {
+  const s = severity[level];
+  return <Badge tone={s.tone}>{s.label} severity</Badge>;
+}
+
+const site: Record<SiteStatus, { label: string; tone: BadgeTone }> = {
+  ACTIVE: { label: "Active", tone: "success" },
+  INACTIVE: { label: "Inactive", tone: "warning" },
+  ARCHIVED: { label: "Archived", tone: "neutral" },
+};
+
+export function SiteStatusBadge({ status }: { status: SiteStatus }) {
+  const s = site[status];
   return (
     <Badge tone={s.tone} dot>
       {s.label}
@@ -50,11 +66,17 @@ export function ShopStatusBadge({ status }: { status: ShopStatus }) {
   );
 }
 
-// Conservative wording: a camera cannot guarantee detection of every touch.
-export const EVENT_TYPE_LABEL: Record<EventType, string> = {
-  PERSON_IN_ZONE: "Person in monitored zone",
-  POSSIBLE_SHUTTER_INTERACTION: "Possible shutter interaction",
-  POSSIBLE_TAMPERING: "Suspicious activity near shutter",
-  CAMERA_OFFLINE: "Camera went offline",
-  AI_OFFLINE: "AI monitoring went offline",
+// Conservative wording: these describe what the system saw, never what someone did.
+export const EVENT_TYPE_LABEL: Record<CargoEventType, string> = {
+  package_detected: "Package detected",
+  package_line_crossing: "Package crossed the counting line",
+  zone_entry: "Package movement entered a zone",
+  zone_exit: "Package movement left a zone",
+  restricted_zone_movement: "Movement in a restricted zone",
+  unusual_after_hours_movement: "Movement outside configured hours",
+  count_mismatch: "Count differs from the expected count",
+  possible_package_damage: "Possible visible package damage",
+  possible_seal_appearance_change: "Possible change in seal appearance",
+  camera_offline: "Camera went offline",
+  ai_service_unavailable: "AI detection is unavailable",
 };

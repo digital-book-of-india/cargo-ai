@@ -17,6 +17,7 @@ adminAuditLogsRouter.get("/", async (req: Request, res: Response) => {
     const action = sanitizeString(req.query.action);
     const targetType = sanitizeString(req.query.targetType);
     const targetId = sanitizeString(req.query.targetId);
+    const companyId = sanitizeString(req.query.companyId);
     const startDate = sanitizeString(req.query.startDate);
     const endDate = sanitizeString(req.query.endDate);
 
@@ -39,6 +40,13 @@ adminAuditLogsRouter.get("/", async (req: Request, res: Response) => {
 
     if (targetId) {
       filter.targetId = targetId;
+    }
+
+    if (companyId) {
+      if (!isValidObjectId(companyId)) {
+        return sendError(res, "INVALID_QUERY", "Invalid companyId format.", 400, requestId);
+      }
+      filter.companyId = companyId;
     }
 
     if (startDate || endDate) {
@@ -82,6 +90,7 @@ adminAuditLogsRouter.get("/", async (req: Request, res: Response) => {
       action: log.action,
       targetType: log.targetType,
       targetId: log.targetId,
+      companyId: log.companyId ?? null,
       reason: log.reason,
       requestId: log.requestId,
       createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : null,

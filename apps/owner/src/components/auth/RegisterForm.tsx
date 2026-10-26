@@ -17,6 +17,7 @@ export function RegisterForm() {
   const next = params.get("next");
 
   const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -29,7 +30,7 @@ export function RegisterForm() {
     if (submitting) return;
     setFormError(null);
 
-    const parsed = registerSchema.safeParse({ name, email: email.trim(), password });
+    const parsed = registerSchema.safeParse({ name, email: email.trim(), password, companyName: companyName.trim() || undefined });
     const fieldErrors = parsed.success ? {} : zodFieldErrors(parsed.error);
     if (password !== confirm) fieldErrors.confirm = "Passwords do not match";
     if (!parsed.success || fieldErrors.confirm) {
@@ -54,7 +55,7 @@ export function RegisterForm() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Create your account</h1>
         <p className="text-sm text-muted-foreground">
-          Set up your shop and start monitoring after-hours activity.
+          Set up your company and its warehouses.
         </p>
       </div>
 
@@ -70,10 +71,19 @@ export function RegisterForm() {
           disabled={submitting}
         />
         <TextField
+          label="Company name"
+          hint="Your company's name. You can change it later."
+          autoComplete="organization"
+          value={companyName}
+          onChange={(e) => setCompanyName(e.target.value)}
+          error={errors.companyName}
+          disabled={submitting}
+        />
+        <TextField
           label="Email"
           type="email"
           autoComplete="email"
-          placeholder="you@yourshop.com"
+          placeholder="you@yoursite.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           error={errors.email}

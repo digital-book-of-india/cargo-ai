@@ -8,7 +8,7 @@ import { Button, Modal } from "@/components/ui";
 // Warns before unsaved edits are lost.
 //  - closing or reloading the tab: the browser's own "leave site?" prompt
 //  - clicking a link inside the app: a dialog with Stay / Leave
-// Not covered: the browser Back button and programmatic navigation (for example the shop switcher).
+// Not covered: the browser Back button and programmatic navigation (for example the site switcher).
 // Render the returned element somewhere in the page.
 export function useUnsavedChangesGuard(dirty: boolean): ReactNode {
   const router = useRouter();

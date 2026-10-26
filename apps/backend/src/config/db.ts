@@ -2,7 +2,13 @@ import mongoose from "mongoose";
 import { env } from "./env";
 import dns from "node:dns";
 
-dns.setServers(["8.8.8.8", "8.8.4.4"]);
+// Some networks cannot resolve the SRV records of mongodb+srv:// addresses. Set DNS_SERVERS (for example
+// "8.8.8.8,8.8.4.4") to use specific resolvers; by default the system resolvers are used.
+const dnsServers = (process.env.DNS_SERVERS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+if (dnsServers.length > 0) dns.setServers(dnsServers);
+
+// In production indexes come from migrations (npm run migrate), not from every server start.
+mongoose.set("autoIndex", env.nodeEnv !== "production");
 
 export async function connectDatabase(): Promise<void> {
   try {

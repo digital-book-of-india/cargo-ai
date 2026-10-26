@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Camera } from "@dbi/api-types";
 import { ICameraDocument } from "../../models/Camera";
 import { env } from "../../config/env";
+import { computeEffectiveCameraStatus } from "../../utils/adminHelpers";
 
 const ENCRYPTION_KEY = crypto
   .createHash("sha256")
@@ -72,12 +73,23 @@ export function sanitizeCamera(cam: ICameraDocument | any): Camera {
     }
   };
 
+  // Truthful status: a camera that has not reported recently is not shown as online.
+  const { effectiveStatus, isStale } = computeEffectiveCameraStatus(
+    cam.status,
+    cam.lastHealthAt,
+    cam.lastFrameAt,
+    env.cameraStaleSeconds
+  );
+
   return {
     id: cam._id ? cam._id.toString() : String(cam.id),
-    shopId: cam.shopId ? cam.shopId.toString() : String(cam.shopId),
+    companyId: cam.companyId ? cam.companyId.toString() : String(cam.companyId),
+    siteId: cam.siteId ? cam.siteId.toString() : String(cam.siteId),
     name: cam.name,
     protocol: cam.protocol,
     status: cam.status,
+    effectiveStatus,
+    isStale,
     lastFrameAt: toIso(cam.lastFrameAt),
     lastHealthAt: toIso(cam.lastHealthAt),
     lastErrorCode: cam.lastErrorCode ?? null,

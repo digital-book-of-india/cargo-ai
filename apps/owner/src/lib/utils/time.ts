@@ -1,4 +1,4 @@
-// Format a UTC ISO-8601 timestamp in the shop's IANA timezone.
+// Format a UTC ISO-8601 timestamp in the site's IANA timezone.
 // A bad timezone or timestamp never throws: the time falls back to UTC and says so.
 export function formatInTimezone(iso: string, timeZone: string): string {
   const date = new Date(iso);

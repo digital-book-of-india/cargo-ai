@@ -143,6 +143,8 @@ export function ZoneEditor({
           onPointerMove={onMove}
           onPointerUp={() => (dragging.current = null)}
           onPointerCancel={() => (dragging.current = null)}
+          role="group"
+          aria-label="Zone editor. Click to add points."
         >
           <defs>
             <marker

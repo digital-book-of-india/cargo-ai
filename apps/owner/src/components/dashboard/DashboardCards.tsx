@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { ArrowRight, Bell, Camera as CameraIcon } from "lucide-react";
 import { DemoBadge } from "@/components/common/DemoBadge";
-import { EVENT_TYPE_LABEL, CameraStatusBadge, ReviewStatusBadge } from "@/components/common/StatusBadges";
+import { EVENT_TYPE_LABEL, CameraStatusBadge, EventStatusBadge } from "@/components/common/StatusBadges";
 import { Alert } from "@/components/common/States";
 import { Button, Card, Skeleton } from "@/components/ui";
 import { friendlyMessage } from "@/lib/api/messages";
-import { TEST_RESULT_MESSAGE, timeAgo } from "@/lib/camera";
+import { TEST_RESULT_MESSAGE, displayStatus, timeAgo } from "@/lib/camera";
 import { formatInTimezone } from "@/lib/utils/time";
 import type { ApiError } from "@/lib/api/errors";
-import type { Camera, SecurityEvent, Shop } from "@/types";
+import type { Camera, CargoEventSummary, Site } from "@/types";
 
 function CardShell({
   icon,
@@ -69,16 +69,16 @@ interface Loadable<T> {
 // ---- Camera health
 
 export function CameraHealthCard({
-  shop,
+  site,
   result,
 }: {
-  shop: Shop;
+  site: Site;
   result: Loadable<Camera[]>;
 }) {
   const { data, loading, error, reload } = result;
   const link = (
     <Button asChild variant="ghost" size="sm">
-      <Link href={`/shops/${shop.id}/cameras`}>Manage</Link>
+      <Link href={`/sites/${site.id}/cameras`}>Manage</Link>
     </Button>
   );
 
@@ -88,9 +88,9 @@ export function CameraHealthCard({
   else if (!data || data.length === 0) {
     body = (
       <>
-        <p className="text-muted-foreground">No camera connected. Nothing is watching your shutter.</p>
+        <p className="text-muted-foreground">No camera connected. Nothing is watching this site.</p>
         <Button asChild size="sm" className="mt-3">
-          <Link href={`/shops/${shop.id}/cameras`}>Add camera</Link>
+          <Link href={`/sites/${site.id}/cameras`}>Add camera</Link>
         </Button>
       </>
     );
@@ -101,13 +101,13 @@ export function CameraHealthCard({
           {data.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-medium">{c.name}</span>
-              <CameraStatusBadge status={c.status} />
+              <CameraStatusBadge status={displayStatus(c)} />
               <span className="w-full text-xs text-muted-foreground">
-                {c.status === "ONLINE"
-                  ? c.lastFrameAt
-                    ? `Last picture ${timeAgo(c.lastFrameAt)}`
+                {displayStatus(c) === "ONLINE"
+                  ? c.lastHealthAt
+                    ? `Last checked ${timeAgo(c.lastHealthAt)}`
                     : "Online"
-                  : TEST_RESULT_MESSAGE[c.status]}
+                  : TEST_RESULT_MESSAGE[displayStatus(c)]}
               </span>
             </li>
           ))}
@@ -129,16 +129,16 @@ export function CameraHealthCard({
 // ---- Latest alerts
 
 export function LatestAlertsCard({
-  shop,
+  site,
   result,
 }: {
-  shop: Shop;
-  result: Loadable<SecurityEvent[]>;
+  site: Site;
+  result: Loadable<CargoEventSummary[]>;
 }) {
   const { data, loading, error, reload } = result;
   const link = (
     <Button asChild variant="ghost" size="sm">
-      <Link href={`/shops/${shop.id}/alerts`}>
+      <Link href={`/sites/${site.id}/alerts`}>
         All alerts <ArrowRight aria-hidden />
       </Link>
     </Button>
@@ -155,14 +155,14 @@ export function LatestAlertsCard({
         {data.map((e) => (
           <li key={e.id} className="py-2 first:pt-0 last:pb-0">
             <Link
-              href={`/shops/${shop.id}/alerts/${e.id}`}
+              href={`/sites/${site.id}/alerts/${e.id}`}
               className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md hover:text-primary"
             >
               <span className="font-medium">{EVENT_TYPE_LABEL[e.eventType] ?? "Alert"}</span>
-              <ReviewStatusBadge status={e.reviewStatus} />
-              {e.demoFlag && <DemoBadge />}
+              <EventStatusBadge status={e.status} />
+              {e.demo && <DemoBadge />}
               <span className="w-full text-xs text-muted-foreground">
-                {formatInTimezone(e.startedAt, shop.timezone)}
+                {formatInTimezone(e.occurredAt, site.timezone)}
               </span>
             </Link>
           </li>

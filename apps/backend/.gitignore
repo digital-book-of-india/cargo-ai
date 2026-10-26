@@ -6,3 +6,10 @@ dist
 storage/evidence/*
 !storage/evidence/.gitkeep
 !.env.example
+
+# evidence uploads (private; never commit)
+uploads/*
+!uploads/.gitkeep
+
+# database backups (personal data; never commit)
+backups/

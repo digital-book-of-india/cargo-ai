@@ -3,6 +3,7 @@ import { visionIngestSchema } from "@dbi/validation";
 import { AppError } from "../../../middleware/errorHandler";
 import { asyncHandler, parseOrThrow } from "../shared/http";
 import { ingestVisionEvent } from "./service";
+import { forwardToInbox } from "./inbox";
 
 // Mounted at /internal/v1/ai/events, behind serviceAuth (see app.ts).
 export const visionIngestRouter = Router();
@@ -41,6 +42,9 @@ visionIngestRouter.post(
     const idempotencyKey = typeof header === "string" ? header.trim() : undefined;
 
     const outcome = await ingestVisionEvent(input, idempotencyKey);
+    // Alert-type events also go to the review inbox. Counting-only events do not. A failure here is
+    // logged and never fails the ingestion: the vision event and the count are already stored.
+    if (outcome.httpStatus === 202) await forwardToInbox(input);
     res.status(outcome.httpStatus).json({ data: outcome.body });
   })
 );

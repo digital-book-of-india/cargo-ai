@@ -47,11 +47,12 @@ export default function OverviewPage() {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <div className="p-5 bg-white border border-[#DBEAFE] rounded-xl shadow-sm">
-          <span className="text-xs font-semibold uppercase text-gray-500">Total Registered Shops</span>
-          <div className="text-3xl font-extrabold text-[#0F172A] mt-2">{data.kpis.totalShops}</div>
+          <span className="text-xs font-semibold uppercase text-gray-500">Companies and Sites</span>
+          <div className="text-3xl font-extrabold text-[#0F172A] mt-2">{data.kpis.totalCompanies}</div>
           <p className="text-xs text-gray-400 mt-1">
-            Active: <strong className="text-green-600">{data.kpis.activeShops}</strong> | Suspended:{" "}
-            <strong className="text-red-500">{data.kpis.suspendedShops}</strong>
+            Sites: <strong className="text-green-600">{data.kpis.activeSites}</strong> active |{" "}
+            <strong className="text-gray-500">{data.kpis.inactiveSites}</strong> inactive | Suspended companies:{" "}
+            <strong className="text-red-500">{data.kpis.suspendedCompanies}</strong>
           </p>
         </div>
 
@@ -68,7 +69,7 @@ export default function OverviewPage() {
         <div className="p-5 bg-white border border-[#DBEAFE] rounded-xl shadow-sm">
           <span className="text-xs font-semibold uppercase text-gray-500">Unreviewed Alerts</span>
           <div className="text-3xl font-extrabold text-[#DC2626] mt-2">{data.kpis.unreviewedAlerts}</div>
-          <p className="text-xs text-gray-400 mt-1">NEW events requiring shop review</p>
+          <p className="text-xs text-gray-400 mt-1">NEW events awaiting company review</p>
         </div>
       </div>
 
@@ -112,7 +113,7 @@ export default function OverviewPage() {
                 <div key={evt.eventId} className="py-3 flex items-center justify-between">
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs font-semibold text-gray-800">{evt.shopName}</span>
+                      <span className="text-xs font-semibold text-gray-800">{evt.siteName}</span>
                       {evt.demoFlag && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
                           DEMO
@@ -120,13 +121,11 @@ export default function OverviewPage() {
                       )}
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {evt.eventType === "POSSIBLE_SHUTTER_INTERACTION"
-                        ? "Possible shutter interaction near shutter"
-                        : evt.eventType}
+                      {evt.summary} <span className="text-gray-400">({evt.status.replace(/_/g, " ")})</span>
                     </p>
                   </div>
                   <span className="text-xs text-gray-400 font-mono">
-                    {evt.startedAt ? new Date(evt.startedAt).toLocaleTimeString() : "N/A"}
+                    {evt.occurredAt ? new Date(evt.occurredAt).toLocaleTimeString() : "N/A"}
                   </span>
                 </div>
               ))

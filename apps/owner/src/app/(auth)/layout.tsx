@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { BellRing, Clock3, ShieldCheck, Video } from "lucide-react";
 import { RedirectIfAuthed } from "@/components/auth/RedirectIfAuthed";
 import { Brand } from "@/components/common/Brand";
-import { DemoBanner } from "@/components/common/DemoBanner";
 
 const points = [
   { icon: Video, title: "Works with your existing CCTV", text: "No new sensors or lock hardware." },
@@ -15,14 +14,13 @@ const points = [
   {
     icon: BellRing,
     title: "Know about it first",
-    text: "Alerts for suspicious activity near your shutter.",
+    text: "Alerts for movement that needs a person to look.",
   },
 ];
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <DemoBanner />
       <div className="grid flex-1 lg:grid-cols-[1.1fr_1fr]">
         {/* form panel */}
         <main className="flex items-center justify-center bg-accent/40 p-5 sm:p-8">
@@ -57,7 +55,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
           <div className="relative max-w-md">
             <h2 className="text-3xl font-semibold leading-tight tracking-tight">
-              Keep an eye on your shutter, even when you are not there.
+              Know what moves through your warehouse, even when you are not there.
             </h2>
             <ul className="mt-8 space-y-5">
               {points.map(({ icon: Icon, title, text }) => (

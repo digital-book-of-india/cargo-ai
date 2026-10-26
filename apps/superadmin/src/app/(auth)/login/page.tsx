@@ -33,9 +33,9 @@ export default function AdminLoginPage() {
 
       const user = json?.data?.user;
 
-      if (user?.role !== "SUPER_ADMIN") {
+      if (user?.role !== "PLATFORM_ADMIN") {
         await fetch(`${base}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {});
-        throw new Error("Access restricted: Account is not a SUPER_ADMIN");
+        throw new Error("Access restricted: Account is not a platform admin");
       }
 
       if (json?.data?.token) {

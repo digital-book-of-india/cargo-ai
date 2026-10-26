@@ -10,8 +10,8 @@ import { checkHost, checkPort, timeAgo } from "../lib/camera";
 describe("Authentication & Navigation Security", () => {
   it("safeNextPath prevents open-redirect and protocol vulnerabilities", () => {
     assert.equal(safeNextPath(null), "/dashboard");
-    assert.equal(safeNextPath("/shops/shop_1/schedule"), "/shops/shop_1/schedule");
-    assert.equal(safeNextPath("/shops/x?tab=1"), "/shops/x?tab=1");
+    assert.equal(safeNextPath("/sites/site_1/schedule"), "/sites/site_1/schedule");
+    assert.equal(safeNextPath("/sites/x?tab=1"), "/sites/x?tab=1");
     assert.equal(safeNextPath("https://evil.test"), "/dashboard");
     assert.equal(safeNextPath("//evil.test"), "/dashboard");
     assert.equal(safeNextPath("/" + String.fromCharCode(92) + "evil.test"), "/dashboard");
@@ -111,5 +111,27 @@ describe("Camera Helpers & Security", () => {
   it("camerasApi exports delete method for camera removal", async () => {
     const { camerasApi } = await import("../lib/api/cameras");
     assert.equal(typeof camerasApi.delete, "function");
+  });
+});
+
+describe("Shipment wording", () => {
+  it("describes a count against the manifest without claiming anything is missing", async () => {
+    const { describeDifference, directionLabel } = await import("../lib/shipments");
+    assert.equal(describeDifference({ expectedCountSnapshot: 100, observedCount: 94, difference: -6 }), "94 of 100 (6 fewer)");
+    assert.equal(describeDifference({ expectedCountSnapshot: 100, observedCount: 103, difference: 3 }), "103 of 100 (3 more)");
+    assert.equal(describeDifference({ expectedCountSnapshot: 50, observedCount: 50, difference: 0 }), "50 of 50 (exact)");
+    assert.equal(describeDifference({ expectedCountSnapshot: 50, observedCount: null, difference: null }), "No count available");
+    assert.equal(describeDifference({ expectedCountSnapshot: null, observedCount: 7, difference: null }), "7 counted, no manifest to compare");
+    assert.equal(directionLabel("outbound"), "Loading out");
+  });
+});
+
+describe("Audit wording and report dates", () => {
+  it("shows known actions in plain words and unknown ones readably", async () => {
+    const { auditLabel, isoDay, dayStart, dayEnd } = await import("../lib/audit");
+    assert.equal(auditLabel("EVENTS_EXPORTED"), "Events exported");
+    assert.equal(auditLabel("SOMETHING_NEW_HAPPENED"), "Something new happened");
+    assert.equal(isoDay(new Date(2026, 2, 5)), "2026-03-05");
+    assert.ok(new Date(dayStart("2026-03-05")) < new Date(dayEnd("2026-03-05")));
   });
 });

@@ -64,11 +64,8 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
     cookies.dbi_token || cookies.accessToken || cookies.token || cookies.access_token || cookies.jwt;
   const rawToken = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : cookieToken;
 
-  const isDevOrTest = process.env.NODE_ENV !== "production";
-  const allowMock = process.env.ALLOW_MOCK_AUTH === "true";
-
   // 1. JWT verification check
-  if (rawToken && !rawToken.startsWith("mock-")) {
+  if (rawToken) {
     const secret = (env as any).jwtAccessSecret || process.env.JWT_ACCESS_SECRET;
 
     if (!secret) {
@@ -121,28 +118,9 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
     }
   }
 
-  // 2. Strict Dev Mock Token (Gated strictly behind ALLOW_MOCK_AUTH)
-  if (!adminReq.user && isDevOrTest && allowMock && rawToken) {
-    if (rawToken === "mock-admin-token") {
-      adminReq.user = {
-        id: "64b000000000000000000001",
-        role: "SUPER_ADMIN",
-        status: "ACTIVE",
-        email: "admin@dbi-intelligence.com",
-        name: "Super Admin",
-      };
-    } else if (rawToken === "mock-owner-token") {
-      adminReq.user = {
-        id: "64b000000000000000000002",
-        role: "SHOP_OWNER",
-        status: "ACTIVE",
-        email: "owner@dbi.com",
-        name: "Shop Owner",
-      };
-    }
-  }
+  // (There is no mock or test-token login: every administrator is a real user in the database.)
 
-  // 3. Unauthenticated -> 401
+  // 2. Unauthenticated -> 401
   if (!adminReq.user || !adminReq.user.id) {
     return res.status(401).json({
       error: {
@@ -153,8 +131,8 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
     });
   }
 
-  // 4. Role mismatch -> 403
-  if (adminReq.user.role !== "SUPER_ADMIN") {
+  // 3. Role mismatch -> 403
+  if (adminReq.user.role !== "PLATFORM_ADMIN") {
     return res.status(403).json({
       error: {
         code: "FORBIDDEN",
@@ -164,7 +142,7 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
     });
   }
 
-  // 5. Account Suspended -> 403
+  // 4. Account suspended -> 403
   if (adminReq.user.status === "SUSPENDED") {
     return res.status(403).json({
       error: {

@@ -1,6 +1,6 @@
 import type { Point, SaveZoneRequest, Zone } from "@/types";
 
-// Pure geometry for the shutter zone. Coordinates are normalized 0..1 of the video frame.
+// Pure geometry for a camera zone. Coordinates are normalized 0..1 of the video frame.
 
 export const MIN_POINTS = 3;
 export const MAX_POINTS = 20;

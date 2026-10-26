@@ -48,3 +48,6 @@ Thumbs.db
 # temporary scratchpad
 scratch/
 
+
+# production compose env (secrets)
+infra/*.env

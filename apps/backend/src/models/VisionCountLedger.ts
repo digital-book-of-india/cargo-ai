@@ -5,7 +5,7 @@ import mongoose, { Schema, model, Document, Types } from "mongoose";
 export interface IVisionCountLedgerDocument extends Document {
   _id: Types.ObjectId;
   eventKey: string;
-  shopId: Types.ObjectId;
+  siteId: Types.ObjectId;
   cameraId: Types.ObjectId;
   zoneId: Types.ObjectId;
   trackId: string;
@@ -20,7 +20,7 @@ export interface IVisionCountLedgerDocument extends Document {
 const visionCountLedgerSchema = new Schema<IVisionCountLedgerDocument>(
   {
     eventKey: { type: String, required: true, unique: true, maxlength: 200 },
-    shopId: { type: Schema.Types.ObjectId, ref: "Shop", required: true, index: true },
+    siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
     cameraId: { type: Schema.Types.ObjectId, ref: "Camera", required: true, index: true },
     zoneId: { type: Schema.Types.ObjectId, ref: "VisionZone", required: true },
     trackId: { type: String, required: true, maxlength: 160 },
@@ -33,7 +33,7 @@ const visionCountLedgerSchema = new Schema<IVisionCountLedgerDocument>(
 );
 
 visionCountLedgerSchema.index({ zoneId: 1, trackId: 1 }, { unique: true });
-visionCountLedgerSchema.index({ shopId: 1, occurredAt: -1 });
+visionCountLedgerSchema.index({ siteId: 1, occurredAt: -1 });
 visionCountLedgerSchema.index({ zoneId: 1, occurredAt: -1 });
 
 export const VisionCountLedgerModel =

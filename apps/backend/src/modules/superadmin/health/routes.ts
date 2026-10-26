@@ -39,7 +39,7 @@ adminHealthRouter.get("/", async (req: Request, res: Response) => {
     // Scan cameras and evaluate truthful status in-memory for pagination and effective filtering
     const allCameras = await CameraModel.find({})
       .sort({ updatedAt: -1, _id: -1 })
-      .populate("shopId", "name demo demoFlag")
+      .populate("siteId", "name code demo")
       .lean();
 
     const mapped = allCameras.map((cam: any) => {
@@ -52,9 +52,10 @@ adminHealthRouter.get("/", async (req: Request, res: Response) => {
 
       return {
         cameraId: cam._id,
-        shopId: cam.shopId?._id || cam.shopId,
-        shopName: cam.shopId?.name || "Unknown Shop",
-        demoFlag: Boolean((cam.shopId as any)?.demo ?? (cam.shopId as any)?.demoFlag),
+        siteId: cam.siteId?._id || cam.siteId,
+        siteName: cam.siteId?.name || "Unknown Site",
+        companyId: cam.companyId,
+        demoFlag: Boolean((cam.siteId as any)?.demo),
         name: cam.name,
         protocol: cam.protocol,
         rawStatus: cam.status,

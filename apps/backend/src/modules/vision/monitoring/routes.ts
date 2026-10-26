@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "../../../middleware/auth";
+import { authenticate, resolveTenant } from "../../../middleware/auth";
 import { AppError } from "../../../middleware/errorHandler";
 import { asyncHandler } from "../shared/http";
 import { getMonitoringStatus, setCameraMonitoring } from "./service";
@@ -7,7 +7,7 @@ import { getMonitoringStatus, setCameraMonitoring } from "./service";
 // Mounted at /api/v1/monitoring (spec section 7)
 export const visionMonitoringRouter = Router();
 
-visionMonitoringRouter.use(authenticate);
+visionMonitoringRouter.use(authenticate, resolveTenant);
 
 // GET /api/v1/monitoring/status?siteId=...
 visionMonitoringRouter.get(

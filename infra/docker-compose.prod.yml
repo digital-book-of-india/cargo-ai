@@ -1,0 +1,71 @@
+# Single-host production-like stack: MongoDB, the API, and both panels.
+#
+#   cp apps/backend/.env.production.example infra/backend.env      # then fill in real values
+#   docker compose -f infra/docker-compose.prod.yml build
+#   docker compose -f infra/docker-compose.prod.yml run --rm migrate  # once per release
+#   docker compose -f infra/docker-compose.prod.yml up -d
+#
+# Put a TLS-terminating reverse proxy in front (and set TRUST_PROXY=1 in backend.env).
+# For a hosted MongoDB (Atlas) remove the `mongo` service and point MONGODB_URI at it.
+# These files have not been built in CI yet: check them on the first deploy (docs/runbook.md).
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: { context: .., dockerfile: infra/docker/backend.Dockerfile }
+    profiles: ["tools"]
+    env_file: backend.env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/dbi_intelligence
+    command: ["node", "dist/migrations/cli.js", "up"]
+    depends_on:
+      mongo: { condition: service_healthy }
+
+  backend:
+    build: { context: .., dockerfile: infra/docker/backend.Dockerfile }
+    restart: unless-stopped
+    env_file: backend.env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/dbi_intelligence
+    ports: ["4000:4000"]
+    volumes:
+      - evidence:/data/evidence
+    depends_on:
+      mongo: { condition: service_healthy }
+
+  owner:
+    build:
+      context: ..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        APP: owner
+        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:4000/api/v1}
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    depends_on: [backend]
+
+  superadmin:
+    build:
+      context: ..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        APP: superadmin
+        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:4000/api/v1}
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+    ports: ["3001:3001"]
+    depends_on: [backend]
+
+volumes:
+  mongo-data:
+  evidence:
