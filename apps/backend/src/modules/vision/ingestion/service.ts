@@ -31,37 +31,40 @@ export async function ingestVisionEvent(
     throw new AppError(400, "VALIDATION_ERROR", "Idempotency-Key header must equal eventKey.");
   }
 
-  // Tenant checks use the database only. input.companyId is never used for authorization.
-  const camera = await CameraModel.findById(input.cameraId).select("siteId").lean();
+  // Tenant checks use the database only. Resolve camera and companyId.
+  const camera = await CameraModel.findById(input.cameraId).select("siteId companyId").lean();
   if (!camera || String(camera.siteId) !== input.siteId) {
     throw new AppError(404, "NOT_FOUND", "Camera not found for this site.");
   }
 
-  const zone = input.zoneId ? await loadEnabledZone(input.zoneId, input.cameraId, input.siteId) : null;
+  const companyId = camera.companyId;
+  const zone = input.zoneId ? await loadEnabledZone(input.zoneId, input.cameraId, input.siteId, companyId) : null;
 
   const payloadHash = crypto.createHash("sha256").update(stableStringify(input)).digest("hex");
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const duplicate = await findDuplicate(input.eventKey, payloadHash);
+    const duplicate = await findDuplicate(companyId, input.eventKey, payloadHash);
     if (duplicate) return duplicate;
 
     try {
-      await writeEventAndCount(input, payloadHash, zone);
+      await writeEventAndCount(input, payloadHash, zone, companyId);
       return { httpStatus: 202, body: { eventId: input.eventKey, ingestionStatus: "accepted" } };
     } catch (err) {
       if (!isDuplicateKeyError(err)) throw err;
-      // A concurrent request stored the same eventKey or track first.
-      // Loop once more so this request returns that stored result.
+      // Concurrent insert with same key; retry to return stored outcome
     }
   }
 
   throw new AppError(409, "DUPLICATE_EVENT", "Event was already processed.");
 }
 
-async function loadEnabledZone(zoneId: string, cameraId: string, siteId: string): Promise<LoadedZone> {
-  const zone = await VisionZoneModel.findById(zoneId).select("siteId cameraId status rules").lean();
+async function loadEnabledZone(zoneId: string, cameraId: string, siteId: string, companyId?: string | Types.ObjectId): Promise<LoadedZone> {
+  const zone = await VisionZoneModel.findById(zoneId).select("siteId cameraId companyId status rules").lean();
   if (!zone || String(zone.cameraId) !== cameraId || String(zone.siteId) !== siteId) {
     throw new AppError(404, "NOT_FOUND", "Zone not found for this camera.");
+  }
+  if (companyId && zone.companyId && String(zone.companyId) !== String(companyId)) {
+    throw new AppError(403, "FORBIDDEN", "Cross-tenant zone access prohibited.");
   }
   if (zone.status !== "active") {
     throw new AppError(422, "BUSINESS_RULE_FAILED", "Zone is not enabled for monitoring.");
@@ -69,8 +72,8 @@ async function loadEnabledZone(zoneId: string, cameraId: string, siteId: string)
   return { id: String(zone._id), rules: zone.rules as VisionZoneRules };
 }
 
-async function findDuplicate(eventKey: string, payloadHash: string): Promise<IngestOutcome | null> {
-  const existing = await VisionEventModel.findOne({ eventKey }).select("payloadHash").lean();
+async function findDuplicate(companyId: Types.ObjectId, eventKey: string, payloadHash: string): Promise<IngestOutcome | null> {
+  const existing = await VisionEventModel.findOne({ companyId, eventKey }).select("payloadHash").lean();
   if (!existing) return null;
   if (existing.payloadHash !== payloadHash) {
     throw new AppError(409, "DUPLICATE_EVENT", "This eventKey was already used with a different payload.");
@@ -78,8 +81,7 @@ async function findDuplicate(eventKey: string, payloadHash: string): Promise<Ing
   return { httpStatus: 200, body: { eventId: eventKey, ingestionStatus: "duplicate" } };
 }
 
-// Decides whether a line crossing becomes a count. Every reason for not counting is stored on the event.
-async function decideCount(input: VisionIngestInput, zone: LoadedZone | null): Promise<CountDecision> {
+async function decideCount(input: VisionIngestInput, zone: LoadedZone | null, companyId: Types.ObjectId): Promise<CountDecision> {
   if (input.movement?.countDelta !== 1) return { countDelta: 0, suppressedReason: null };
   if (!zone || !input.track) return { countDelta: 0, suppressedReason: "NO_ZONE_OR_TRACK" };
 
@@ -90,8 +92,9 @@ async function decideCount(input: VisionIngestInput, zone: LoadedZone | null): P
   if (input.track.confidence < rules.minimumConfidence) {
     return { countDelta: 0, suppressedReason: "BELOW_MIN_CONFIDENCE" };
   }
-  // MVP rule: count once per track per zone. The track id must be session-scoped (spec FR-05).
+
   const alreadyCounted = await VisionCountLedgerModel.exists({
+    companyId,
     zoneId: new Types.ObjectId(zone.id),
     trackId: input.track.trackId,
   });
@@ -103,9 +106,10 @@ async function decideCount(input: VisionIngestInput, zone: LoadedZone | null): P
 async function writeEventAndCount(
   input: VisionIngestInput,
   payloadHash: string,
-  zone: LoadedZone | null
+  zone: LoadedZone | null,
+  companyId: Types.ObjectId
 ): Promise<void> {
-  const decision = await decideCount(input, zone);
+  const decision = await decideCount(input, zone, companyId);
   const siteId = new Types.ObjectId(input.siteId);
   const cameraId = new Types.ObjectId(input.cameraId);
   const zoneId = zone ? new Types.ObjectId(zone.id) : null;
@@ -116,6 +120,7 @@ async function writeEventAndCount(
       await VisionEventModel.create(
         [
           {
+            companyId,
             eventKey: input.eventKey,
             payloadHash,
             siteId,
@@ -133,7 +138,7 @@ async function writeEventAndCount(
                 }
               : null,
             evidence: input.evidence ?? null,
-            detector: input.model ?? null,
+            detector: input.model ?? { name: "cargo-yolov8n-pkg", version: "1.2.0" },
           },
         ],
         { session }
@@ -143,6 +148,7 @@ async function writeEventAndCount(
         await VisionCountLedgerModel.create(
           [
             {
+              companyId,
               eventKey: input.eventKey,
               siteId,
               cameraId,

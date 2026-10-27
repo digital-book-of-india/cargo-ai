@@ -7,6 +7,7 @@ const TICK_MS = 15_000;
 let timer: NodeJS.Timeout | null = null;
 
 type MonitorRow = {
+  companyId?: Types.ObjectId;
   siteId?: Types.ObjectId;
   shopId?: Types.ObjectId;
   cameraId: Types.ObjectId;
@@ -31,7 +32,7 @@ export function stopVisionMonitorJob(): void {
 
 export async function runStalenessCheck(now: Date = new Date()): Promise<{ cameraOffline: number; aiUnavailable: number }> {
   const monitors = await VisionCameraMonitorModel.find({ enabled: true })
-    .select("siteId shopId cameraId lastFrameAt workerId")
+    .select("companyId siteId shopId cameraId lastFrameAt workerId")
     .lean<MonitorRow[]>();
   if (monitors.length === 0) return { cameraOffline: 0, aiUnavailable: 0 };
 
@@ -75,17 +76,22 @@ async function recordSystemEvent(
   occurredAt: Date
 ): Promise<boolean> {
   let siteId = m.siteId || m.shopId;
-  if (!siteId) {
-    const cam = await CameraModel.findById(m.cameraId).select("siteId shopId").lean<{ siteId?: Types.ObjectId; shopId?: Types.ObjectId }>();
-    siteId = cam?.siteId || cam?.shopId;
+  let companyId = m.companyId;
+  if (!siteId || !companyId) {
+    const cam = await CameraModel.findById(m.cameraId)
+      .select("companyId siteId shopId")
+      .lean<{ companyId?: Types.ObjectId; siteId?: Types.ObjectId; shopId?: Types.ObjectId }>();
+    siteId = siteId || cam?.siteId || cam?.shopId;
+    companyId = companyId || cam?.companyId;
   }
-  if (!siteId) {
+  if (!siteId || !companyId) {
     return false;
   }
 
   const eventKey = `${eventType}:${String(m.cameraId)}:${episode}`;
   try {
     await VisionEventModel.create({
+      companyId,
       eventKey,
       payloadHash: crypto.createHash("sha256").update(eventKey).digest("hex"),
       siteId,

@@ -1,7 +1,10 @@
 {
   "name": "dbi-intelligence",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev:owner": "npm run dev -w @dbi/owner",
     "dev:superadmin": "npm run dev -w @dbi/superadmin",
@@ -16,5 +19,14 @@
     "eval:accuracy": "tsx scripts/evaluate-accuracy.ts",
     "check:secrets": "node scripts/check-secrets.js",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "dependencies": {
+    "debug": "^4.4.3",
+    "express": "^5.3.0",
+    "finalhandler": "^2.1.1",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/ioredis": "^4.28.10"
   }
 }

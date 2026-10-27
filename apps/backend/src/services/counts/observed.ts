@@ -34,14 +34,16 @@ const ledgerProvider: ObservedCountProvider = async (q) => {
   if (mongoose.connection.readyState !== 1) return null;
   // For a counting line, what matters is that the line's own camera is monitored. Without a line, any monitored camera at the site.
   let monitored: unknown;
+  const company = q.companyId ? { companyId: new mongoose.Types.ObjectId(q.companyId) } : {};
   if (q.zoneId) {
     const line = await VisionZoneModel.findOne({ _id: q.zoneId, siteId: q.siteId }).select("cameraId").lean();
-    monitored = line ? await VisionCameraMonitorModel.exists({ cameraId: line.cameraId, enabled: true }) : null;
+    monitored = line ? await VisionCameraMonitorModel.exists({ cameraId: line.cameraId, enabled: true, ...company }) : null;
   } else {
-    monitored = await VisionCameraMonitorModel.exists({ siteId: new mongoose.Types.ObjectId(q.siteId), enabled: true });
+    monitored = await VisionCameraMonitorModel.exists({ siteId: new mongoose.Types.ObjectId(q.siteId), enabled: true, ...company });
   }
   if (!monitored) return null;
   const totals = await ledgerTotals({
+    companyId: q.companyId,
     siteId: q.siteId,
     zoneId: q.zoneId ?? undefined,
     from: q.from,
@@ -63,11 +65,6 @@ export async function getObservedCount(query: ObservedCountQuery): Promise<Obser
   }
 }
 
-// The observed number for a session is the count in the session's own direction: an outbound
-// session uses the OUT crossings, an inbound session the IN crossings. The other direction is
-// NOT subtracted: a package seen going the other way is a separate fact (a return, or a double
-// crossing), and hiding it inside a smaller total could make a real discrepancy look like a match.
-// Both directions are stored with the session so a reviewer can see them.
 export function observedForSession(direction: SessionDirection, counts: ObservedCounts): number {
   return direction === "outbound" ? counts.outCount : counts.inCount;
 }
