@@ -9,6 +9,7 @@ import type {
 
 export interface IVisionZoneDocument extends Document {
   _id: Types.ObjectId;
+  companyId: Types.ObjectId;
   siteId: Types.ObjectId; // site this zone belongs to; the tenant key
   cameraId: Types.ObjectId;
   name: string;
@@ -26,7 +27,7 @@ export interface IVisionZoneDocument extends Document {
 
 const visionZoneSchema = new Schema<IVisionZoneDocument>(
   {
-    siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
+    companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true, index: true },siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
     cameraId: { type: Schema.Types.ObjectId, ref: "Camera", required: true, index: true },
     name: { type: String, required: true, trim: true, maxlength: 80 },
     zoneType: {

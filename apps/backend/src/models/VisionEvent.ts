@@ -17,6 +17,7 @@ export const VISION_EVENT_TYPE_VALUES: VisionEventType[] = [
 
 export interface IVisionEventDocument extends Document {
   _id: Types.ObjectId;
+  companyId: Types.ObjectId;
   eventKey: string; // idempotency key, globally unique
   payloadHash: string; // sha256 of the normalised payload, to detect key reuse
   siteId: Types.ObjectId; // site (tenant key)
@@ -34,9 +35,9 @@ export interface IVisionEventDocument extends Document {
 
 const visionEventSchema = new Schema<IVisionEventDocument>(
   {
-    eventKey: { type: String, required: true, unique: true, maxlength: 200 },
+    eventKey: { type: String, required: true, maxlength: 200 },
     payloadHash: { type: String, required: true },
-    siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
+    companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true, index: true },siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
     cameraId: { type: Schema.Types.ObjectId, ref: "Camera", required: true, index: true },
     zoneId: { type: Schema.Types.ObjectId, ref: "VisionZone", default: null, index: true },
     eventType: { type: String, enum: VISION_EVENT_TYPE_VALUES, required: true, index: true },
@@ -49,6 +50,7 @@ const visionEventSchema = new Schema<IVisionEventDocument>(
   { collection: "vision_events", timestamps: true }
 );
 
+visionEventSchema.index({ companyId: 1, eventKey: 1 }, { unique: true });
 visionEventSchema.index({ siteId: 1, occurredAt: -1 });
 
 export const VisionEventModel =

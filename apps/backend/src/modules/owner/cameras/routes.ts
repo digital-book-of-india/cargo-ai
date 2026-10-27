@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import net from "net";
 import { Types } from "mongoose";
 import { assignCameraSiteSchema, cameraRegisterSchema, cameraUpdateSchema, zoneSchema } from "@dbi/validation";
-import { CameraModel, SiteModel, ZoneModel } from "../../../models";
+import { CameraModel, SiteModel, VisionZoneModel } from "../../../models";
 import { asyncHandler, guard, requireCameraAccess, requireSiteAccess } from "../../../middleware/auth";
 import { AppError } from "../../../middleware/errorHandler";
 import { cameraControlRateLimiter } from "../../../middleware/rateLimiter";
@@ -228,7 +228,7 @@ cameraRouter.post(
     if (fromSiteId !== target._id.toString()) {
       camera.siteId = target._id;
       await camera.save();
-      await ZoneModel.updateMany({ cameraId: camera._id, companyId: camera.companyId }, { siteId: target._id });
+      await VisionZoneModel.updateMany({ cameraId: camera._id, companyId: camera.companyId }, { siteId: target._id });
       await auditFromRequest(req, "CAMERA_SITE_ASSIGNED", "Camera", camera._id.toString(), {
         metadata: { fromSiteId, toSiteId: target._id.toString() },
       });
@@ -250,7 +250,7 @@ cameraRouter.put(
     const camera = req.camera!;
     const { zoneType, polygon, sensitivity, enabled } = parsed.data;
 
-    const zone = await ZoneModel.findOneAndUpdate(
+    const zone = await VisionZoneModel.findOneAndUpdate(
       { cameraId: camera._id, companyId: camera.companyId },
       {
         cameraId: camera._id,
@@ -276,8 +276,8 @@ cameraRouter.get(
   "/:cameraId/zones",
   ...requireCameraAccess("zones:read"),
   asyncHandler(async (req: Request, res: Response) => {
-    const zone = await ZoneModel.findOne({ cameraId: req.camera!._id, companyId: req.camera!.companyId });
-    if (!zone) throw new AppError(404, "NOT_FOUND", "No zone defined for this camera.");
+    const zone = await VisionZoneModel.findOne({ cameraId: req.camera!._id, companyId: req.camera!.companyId });
+    if (!zone) return res.json({ data: { zone: null }, zone: null });
     res.json({ data: { zone: formatZone(zone) } });
   })
 );
@@ -289,7 +289,7 @@ cameraRouter.delete(
   asyncHandler(async (req: Request, res: Response) => {
     const camera = req.camera!;
     await CameraModel.deleteOne({ _id: camera._id, companyId: camera.companyId });
-    await ZoneModel.deleteMany({ cameraId: camera._id, companyId: camera.companyId });
+    await VisionZoneModel.deleteMany({ cameraId: camera._id, companyId: camera.companyId });
     await auditFromRequest(req, "CAMERA_DELETED", "Camera", camera._id.toString(), {
       metadata: { siteId: camera.siteId.toString(), name: camera.name },
     });

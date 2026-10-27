@@ -4,6 +4,7 @@ import type { VisionStreamStatus } from "@dbi/api-types";
 // One row per camera. "enabled" is the flag the worker reads (via worker config).
 export interface IVisionCameraMonitorDocument extends Document {
   _id: Types.ObjectId;
+  companyId: Types.ObjectId;
   siteId: Types.ObjectId;
   cameraId: Types.ObjectId;
   enabled: boolean;
@@ -21,7 +22,7 @@ export interface IVisionCameraMonitorDocument extends Document {
 
 const visionCameraMonitorSchema = new Schema<IVisionCameraMonitorDocument>(
   {
-    siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
+    companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true, index: true },siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
     cameraId: { type: Schema.Types.ObjectId, ref: "Camera", required: true, unique: true },
     enabled: { type: Boolean, default: false, index: true },
     enabledAt: { type: Date, default: null },

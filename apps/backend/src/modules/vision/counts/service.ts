@@ -14,6 +14,7 @@ export interface DateRange {
 }
 
 interface MatchInput extends DateRange {
+  companyId?: string | Types.ObjectId;
   siteId: string;
   zoneId?: string;
   cameraId?: string;
@@ -25,6 +26,9 @@ function matchStage(input: MatchInput): Record<string, unknown> {
     siteId: parseObjectId(input.siteId, "siteId"),
     occurredAt: { $gte: input.from, $lt: input.to },
   };
+  if (input.companyId) {
+    match.companyId = typeof input.companyId === "string" ? parseObjectId(input.companyId, "companyId") : input.companyId;
+  }
   if (input.zoneId) match.zoneId = parseObjectId(input.zoneId, "zoneId");
   if (input.cameraId) match.cameraId = parseObjectId(input.cameraId, "cameraId");
   if (input.direction) match.direction = input.direction;
@@ -44,6 +48,7 @@ function addToTotals(totals: VisionCountTotals, direction: string, n: number): v
 
 // Contract for Dev 1 (shift and session reports). The caller must already have authorised siteId.
 export interface ObservedCountInput {
+  companyId?: string | Types.ObjectId;
   siteId: string;
   zoneId?: string;
   cameraId?: string;
@@ -95,7 +100,7 @@ export async function countSummary(
   }
 
   const rows = await VisionCountLedgerModel.aggregate<{ _id: { key: unknown; direction: string }; n: number }>([
-    { $match: matchStage({ siteId: input.siteId, from: input.from, to: input.to }) },
+    { $match: matchStage({ companyId: (req as any).companyId || (req.user as any)?.companyId, siteId: input.siteId, from: input.from, to: input.to }) },
     { $group: { _id: { key: groupKey, direction: "$direction" }, n: { $sum: "$countDelta" } } },
   ]);
 

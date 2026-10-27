@@ -32,9 +32,17 @@ const registry = globalThis as unknown as { __dbiObservedProvider?: ObservedCoun
 // available" (null) instead of a misleading zero.
 const ledgerProvider: ObservedCountProvider = async (q) => {
   if (mongoose.connection.readyState !== 1) return null;
-  const monitored = await VisionCameraMonitorModel.exists({ siteId: new mongoose.Types.ObjectId(q.siteId), enabled: true });
+  const filter: Record<string, unknown> = {
+    siteId: new mongoose.Types.ObjectId(q.siteId),
+    enabled: true,
+  };
+  if (q.companyId) {
+    filter.companyId = new mongoose.Types.ObjectId(q.companyId);
+  }
+  const monitored = await VisionCameraMonitorModel.exists(filter);
   if (!monitored) return null;
   const totals = await ledgerTotals({
+    companyId: q.companyId,
     siteId: q.siteId,
     zoneId: q.zoneId ?? undefined,
     from: q.from,
@@ -56,11 +64,6 @@ export async function getObservedCount(query: ObservedCountQuery): Promise<Obser
   }
 }
 
-// The observed number for a session is the count in the session's own direction: an outbound
-// session uses the OUT crossings, an inbound session the IN crossings. The other direction is
-// NOT subtracted: a package seen going the other way is a separate fact (a return, or a double
-// crossing), and hiding it inside a smaller total could make a real discrepancy look like a match.
-// Both directions are stored with the session so a reviewer can see them.
 export function observedForSession(direction: SessionDirection, counts: ObservedCounts): number {
   return direction === "outbound" ? counts.outCount : counts.inCount;
 }

@@ -63,12 +63,13 @@ export function toVisionZoneDto(zone: IVisionZoneDocument): VisionZone {
   };
 }
 
-async function assertCameraInSite(cameraId: Types.ObjectId, siteId: Types.ObjectId): Promise<void> {
-  const camera = await CameraModel.findById(cameraId).select("siteId").lean();
+async function assertCameraInSite(cameraId: Types.ObjectId, siteId: Types.ObjectId): Promise<Types.ObjectId> {
+  const camera = await CameraModel.findById(cameraId).select("siteId companyId").lean<{ siteId: Types.ObjectId; companyId: Types.ObjectId }>();
   // Same 404 for "missing" and "other site": no existence leak across tenants.
   if (!camera || String(camera.siteId) !== siteId.toString()) {
     throw new AppError(404, "NOT_FOUND", "Camera not found for this site.");
   }
+  return camera.companyId;
 }
 
 // Loads a zone and checks the user's access to its site. Used by every /zones/:zoneId route.
@@ -104,9 +105,10 @@ export async function createZone(req: Request, input: SaveVisionZoneInput): Prom
   const siteId = parseObjectId(input.siteId, "siteId");
   await assertSiteAccess(req, siteId.toString());
   const cameraId = parseObjectId(input.cameraId, "cameraId");
-  await assertCameraInSite(cameraId, siteId);
+  const companyId = await assertCameraInSite(cameraId, siteId);
 
   const zone = await VisionZoneModel.create({
+    companyId,
     siteId,
     cameraId,
     name: input.name,

@@ -160,7 +160,7 @@ export async function setCameraMonitoring(
   enabled: boolean
 ): Promise<VisionCameraMonitoringStatus> {
   const cameraId = parseObjectId(cameraIdRaw, "cameraId");
-  const camera = await CameraModel.findById(cameraId).select("siteId").lean<{ siteId: Types.ObjectId }>();
+  const camera = await CameraModel.findById(cameraId).select("siteId companyId").lean<{ siteId: Types.ObjectId; companyId: Types.ObjectId }>();
   if (!camera) throw new AppError(404, "NOT_FOUND", "Camera not found.");
   await assertSiteAccess(req, String(camera.siteId));
 
@@ -181,6 +181,7 @@ export async function setCameraMonitoring(
     { cameraId },
     {
       $set: {
+        companyId: camera.companyId,
         siteId: camera.siteId,
         enabled,
         ...(enabled ? { enabledAt: now } : { disabledAt: now }),
