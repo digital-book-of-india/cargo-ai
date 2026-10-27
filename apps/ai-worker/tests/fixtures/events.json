@@ -1,0 +1,139 @@
+{
+  "after_hours": {
+    "cameraId": "cccccccccccccccccccccccc",
+    "companyId": "dddddddddddddddddddddddd",
+    "eventKey": "sess-1:cccccccccccccccccccccccc:1:bbbbbbbbbbbbbbbbbbbbbbbb:unusual_after_hours_movement:1",
+    "eventType": "unusual_after_hours_movement",
+    "evidence": {
+      "snapshotObjectKey": "private/key/pic.jpg"
+    },
+    "model": {
+      "name": "package-model",
+      "version": "v7"
+    },
+    "occurredAt": "2026-10-27T12:00:00+00:00",
+    "siteId": "eeeeeeeeeeeeeeeeeeeeeeee",
+    "track": {
+      "bbox": [
+        0.45,
+        0.45,
+        0.55,
+        0.55
+      ],
+      "class": "package",
+      "confidence": 0.9,
+      "trackId": "sess-1:cccccccccccccccccccccccc:1"
+    },
+    "zoneId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "line_crossing_counted": {
+    "cameraId": "cccccccccccccccccccccccc",
+    "companyId": "dddddddddddddddddddddddd",
+    "eventKey": "sess-1:cccccccccccccccccccccccc:1:aaaaaaaaaaaaaaaaaaaaaaaa:package_line_crossing:1",
+    "eventType": "package_line_crossing",
+    "evidence": {
+      "snapshotObjectKey": "private/key/pic.jpg"
+    },
+    "model": {
+      "name": "package-model",
+      "version": "v7"
+    },
+    "movement": {
+      "countDelta": 1,
+      "direction": "IN"
+    },
+    "occurredAt": "2026-10-27T12:00:00+00:00",
+    "siteId": "eeeeeeeeeeeeeeeeeeeeeeee",
+    "track": {
+      "bbox": [
+        0.45,
+        0.5,
+        0.55,
+        0.6
+      ],
+      "class": "package",
+      "confidence": 0.9,
+      "trackId": "sess-1:cccccccccccccccccccccccc:1"
+    },
+    "zoneId": "aaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "line_crossing_not_counted": {
+    "cameraId": "cccccccccccccccccccccccc",
+    "companyId": "dddddddddddddddddddddddd",
+    "eventKey": "sess-1:cccccccccccccccccccccccc:1:aaaaaaaaaaaaaaaaaaaaaaaa:package_line_crossing:1",
+    "eventType": "package_line_crossing",
+    "model": {
+      "name": "package-model",
+      "version": "v7"
+    },
+    "movement": {
+      "countDelta": 0,
+      "direction": "OUT"
+    },
+    "occurredAt": "2026-10-27T12:00:00+00:00",
+    "siteId": "eeeeeeeeeeeeeeeeeeeeeeee",
+    "track": {
+      "bbox": [
+        0.45,
+        0.4,
+        0.55,
+        0.5
+      ],
+      "class": "package",
+      "confidence": 0.9,
+      "trackId": "sess-1:cccccccccccccccccccccccc:1"
+    },
+    "zoneId": "aaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "loading_bay_entry": {
+    "cameraId": "cccccccccccccccccccccccc",
+    "companyId": "dddddddddddddddddddddddd",
+    "eventKey": "sess-1:cccccccccccccccccccccccc:1:bbbbbbbbbbbbbbbbbbbbbbbb:zone_entry:1",
+    "eventType": "zone_entry",
+    "model": {
+      "name": "package-model",
+      "version": "v7"
+    },
+    "occurredAt": "2026-10-27T12:00:00+00:00",
+    "siteId": "eeeeeeeeeeeeeeeeeeeeeeee",
+    "track": {
+      "bbox": [
+        0.45,
+        0.45,
+        0.55,
+        0.55
+      ],
+      "class": "package",
+      "confidence": 0.9,
+      "trackId": "sess-1:cccccccccccccccccccccccc:1"
+    },
+    "zoneId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "restricted_entry": {
+    "cameraId": "cccccccccccccccccccccccc",
+    "companyId": "dddddddddddddddddddddddd",
+    "eventKey": "sess-1:cccccccccccccccccccccccc:1:bbbbbbbbbbbbbbbbbbbbbbbb:restricted_zone_movement:1",
+    "eventType": "restricted_zone_movement",
+    "evidence": {
+      "snapshotObjectKey": "private/key/pic.jpg"
+    },
+    "model": {
+      "name": "package-model",
+      "version": "v7"
+    },
+    "occurredAt": "2026-10-27T12:00:00+00:00",
+    "siteId": "eeeeeeeeeeeeeeeeeeeeeeee",
+    "track": {
+      "bbox": [
+        0.45,
+        0.45,
+        0.55,
+        0.55
+      ],
+      "class": "package",
+      "confidence": 0.9,
+      "trackId": "sess-1:cccccccccccccccccccccccc:1"
+    },
+    "zoneId": "bbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+}

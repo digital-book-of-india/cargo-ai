@@ -6,7 +6,6 @@ export * from "./CompanyMember";
 export * from "./Invitation";
 export * from "./Site";
 export * from "./Camera";
-export * from "./Zone";
 export * from "./CargoEvent";
 export * from "./EventHistory";
 export * from "./EventNote";

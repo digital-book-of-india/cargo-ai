@@ -85,20 +85,19 @@ export function evaluateStreamPerformance(
   };
 }
 
-// Self-test
-const sampleGT: GroundTruthEvent[] = [
-  { timeOffsetSeconds: 10.2, direction: "OUT", objectClass: "package" },
-  { timeOffsetSeconds: 24.5, direction: "OUT", objectClass: "box" },
-  { timeOffsetSeconds: 58.1, direction: "IN", objectClass: "pallet" },
-];
-
-const sampleObs: ObservedEvent[] = [
-  { timeOffsetSeconds: 10.4, direction: "OUT", objectClass: "package", confidence: 0.94 },
-  { timeOffsetSeconds: 24.2, direction: "OUT", objectClass: "box", confidence: 0.88 },
-  { timeOffsetSeconds: 40.0, direction: "OUT", objectClass: "package", confidence: 0.62 }, // FP
-  { timeOffsetSeconds: 58.0, direction: "IN", objectClass: "pallet", confidence: 0.91 },
-];
-
-const report = evaluateStreamPerformance(sampleGT, sampleObs, 0.5);
-console.log("=== Cargo Vision Accuracy Pilot Evaluation ===");
-console.table(report);
+// Command line: npm run eval:accuracy -- <ground-truth.json> <observed.json> <video-hours>
+//   ground-truth.json  [{ "timeOffsetSeconds": 10.2, "direction": "IN", "objectClass": "package" }, ...]  counted by a person
+//   observed.json      the same shape plus "confidence", taken from what the worker reported for the same footage
+// Prints the result as JSON. The numbers in docs/vision/pilot-report.md must come from this, run on real footage.
+if (process.argv[1] && /evaluate-accuracy\.[tj]s$/.test(process.argv[1])) {
+  const [truthFile, observedFile, hours] = process.argv.slice(2);
+  if (!truthFile || !observedFile || !hours || !(Number(hours) > 0)) {
+    console.error("Usage: npm run eval:accuracy -- <ground-truth.json> <observed.json> <video-hours>");
+    process.exit(2);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require("node:fs") as typeof import("node:fs");
+  const truth = JSON.parse(fs.readFileSync(truthFile, "utf8")) as GroundTruthEvent[];
+  const observed = JSON.parse(fs.readFileSync(observedFile, "utf8")) as ObservedEvent[];
+  console.log(JSON.stringify(evaluateStreamPerformance(truth, observed, Number(hours)), null, 2));
+}

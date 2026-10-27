@@ -14,6 +14,7 @@ import { env } from "../../../config/env";
 import {
   AiWorkerHealthModel,
   CameraModel,
+  SiteModel,
   VisionCameraMonitorModel,
   VisionZoneModel,
 } from "../../../models";
@@ -259,8 +260,12 @@ export async function recordWorkerHeartbeat(
 // What the worker needs to run: enabled cameras with active zones. No secrets (stream URL comes from stream-config).
 export async function getWorkerConfig(workerId: string): Promise<VisionWorkerConfig> {
   const monitors = await VisionCameraMonitorModel.find({ enabled: true })
-    .select("siteId cameraId")
-    .lean<{ siteId: Types.ObjectId; cameraId: Types.ObjectId }[]>();
+    .select("companyId siteId cameraId")
+    .lean<{ companyId: Types.ObjectId; siteId: Types.ObjectId; cameraId: Types.ObjectId }[]>();
+  const sites = await SiteModel.find({ _id: { $in: [...new Set(monitors.map((m) => String(m.siteId)))] } })
+    .select("timezone")
+    .lean<{ _id: Types.ObjectId; timezone: string }[]>();
+  const timezoneBySite = new Map(sites.map((s) => [String(s._id), s.timezone]));
   const cameraIds = monitors.map((m) => m.cameraId);
 
   const zones: ZoneLean[] = cameraIds.length
@@ -281,7 +286,9 @@ export async function getWorkerConfig(workerId: string): Promise<VisionWorkerCon
     cameras: monitors
       .map((m) => ({
         cameraId: String(m.cameraId),
+        companyId: String(m.companyId),
         siteId: String(m.siteId),
+        timezone: timezoneBySite.get(String(m.siteId)) ?? "UTC",
         zones: zonesByCamera.get(String(m.cameraId)) ?? [],
       }))
       .filter((c) => c.zones.length > 0),

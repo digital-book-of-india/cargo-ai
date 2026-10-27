@@ -50,7 +50,7 @@ export const visionIngestSchema = z
   .object({
     eventKey: z.string().trim().min(1).max(200),
     // Accepted for spec compatibility. Never used for authorization (spec section 3 and 6).
-    companyId: z.string().trim().min(1).max(64),
+    companyId: z.string().trim().min(1).max(64).optional(),
     siteId: z.string().regex(OBJECT_ID, "siteId must be a valid id"),
     cameraId: z.string().regex(OBJECT_ID, "cameraId must be a valid id"),
     zoneId: z.string().regex(OBJECT_ID, "zoneId must be a valid id").nullable().optional(),

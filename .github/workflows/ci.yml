@@ -36,8 +36,15 @@ jobs:
         run: npm run typecheck
       - name: Lint (owner panel)
         run: npm run lint -w @dbi/owner
-      - name: Unit tests (owner panel and backend)
+      - name: Unit tests (owner panel, super admin and backend)
         run: npm test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: AI worker tests
+        run: |
+          pip install -r apps/ai-worker/requirements.txt
+          npm run test:worker
       - name: Backend integration tests (tenancy, events, shipments, reports, vision chain, operations)
         run: npm run test:int -w @dbi/backend
       - name: Build backend

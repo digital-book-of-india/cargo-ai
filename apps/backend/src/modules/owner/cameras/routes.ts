@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import net from "net";
 import { Types } from "mongoose";
 import { assignCameraSiteSchema, cameraRegisterSchema, cameraUpdateSchema, zoneSchema } from "@dbi/validation";
-import { CameraModel, SiteModel, VisionZoneModel, ZoneModel } from "../../../models";
+import { CameraModel, SiteModel, VisionZoneModel } from "../../../models";
 import { assertCameraFreeOfOpenSessions, followCameraToSite, retireCameraVisionData } from "../../../services/cameras/lifecycle";
 import { assertCameraHostAllowed, resolveAllowedAddress } from "../../../services/cameras/hostPolicy";
 import { asyncHandler, guard, requireCameraAccess, requireSiteAccess } from "../../../middleware/auth";
@@ -261,7 +261,6 @@ cameraRouter.post(
       } catch (err) {
         throw nameTaken(err);
       }
-      await ZoneModel.updateMany({ cameraId: camera._id, companyId: camera.companyId }, { siteId: target._id });
       await followCameraToSite(camera._id, target._id);
       await auditFromRequest(req, "CAMERA_SITE_ASSIGNED", "Camera", camera._id.toString(), {
         metadata: { fromSiteId, toSiteId: target._id.toString() },
@@ -324,7 +323,6 @@ cameraRouter.delete(
     const camera = req.camera!;
     await assertCameraFreeOfOpenSessions(camera._id, "deleted");
     await CameraModel.deleteOne({ _id: camera._id, companyId: camera.companyId });
-    await ZoneModel.deleteMany({ cameraId: camera._id, companyId: camera.companyId });
     await retireCameraVisionData(camera._id);
     await auditFromRequest(req, "CAMERA_DELETED", "Camera", camera._id.toString(), {
       metadata: { siteId: camera.siteId.toString(), name: camera.name },

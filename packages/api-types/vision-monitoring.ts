@@ -44,5 +44,5 @@ export interface VisionWorkerZone {
 export interface VisionWorkerConfig {
   workerId: string;
   heartbeatIntervalSeconds: number;
-  cameras: Array<{ cameraId: string; siteId: string; zones: VisionWorkerZone[] }>;
+  cameras: Array<{ cameraId: string; companyId: string; siteId: string; timezone: string; zones: VisionWorkerZone[] }>;
 }

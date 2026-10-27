@@ -14,7 +14,7 @@ Dev 2 owns the Vision subsystem: zones backend & UI, AI ingestion pipeline, coun
 | **Zone Management** | `apps/owner/src/app/(app)/sites/[siteId]/cameras/[cameraId]/zone/page.tsx` | Class selection (package, box, pallet), confidence slider, validate & enable actions. |
 | **Live Monitoring** | `apps/owner/src/app/(app)/sites/[siteId]/cameras/[cameraId]/live/page.tsx` | HUD stream overlay, active zone visualization, coverage badges, live crossing ledger. |
 | **Cargo Dashboard** | `apps/owner/src/app/(app)/dashboard/page.tsx` | IN/OUT line crossing metrics, movement totals, camera monitoring health, and event inbox. |
-| **AI Worker** | `apps/ai-worker/src/main.py` | Python worker: auto-config fetch, session-scoped tracker, line crossing vector geometry with debounce, event ingestion. |
+| **AI Worker** | `apps/ai-worker/` (see its README) | Python worker: trained ONNX model, session-scoped tracker, line crossings and polygon zone events, on-disk retry buffer, site time zone. |
 | **Accuracy Harness** | `scripts/evaluate-accuracy.ts` | Ground-truth benchmark evaluator calculating precision, recall, F1, and count error percentage. |
 | **QA Verification** | `scripts/test-qa03.ps1` | Automated idempotency test verifying 202 Accepted, 200 Duplicate, and 409 Conflict. |
 

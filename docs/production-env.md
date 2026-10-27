@@ -30,6 +30,7 @@ secret store, never in git. This table explains every backend variable.
 | `CARGO_AUDIT_RETENTION_DAYS` | no (365) | Audit entries older than this are deleted by the daily job. Set a very large number to keep them effectively forever. |
 | `CAMERA_STALE_SECONDS` | no (120) | A camera silent this long is shown as not online. |
 | `WORKER_STALE_SECONDS` | no (60) | The AI worker is shown as down after this silence. |
+| `REDIS_URL` | no | Redis for caches (use `rediss://` for TLS). Or set `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS=true`. Local default: `redis://127.0.0.1:6379`. |
 | `ADMIN_RATE_LIMIT_PER_MIN` | no (100) | Super admin API limit per address. |
 | `BODY_LIMIT` | no (1mb) | JSON body limit. |
 | `LOG_LEVEL` | no (info) | `debug`, `info`, `warn`, `error`. |

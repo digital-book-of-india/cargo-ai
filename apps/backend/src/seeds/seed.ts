@@ -12,7 +12,6 @@ import {
   SiteModel,
   UserModel,
   VisionZoneModel,
-  ZoneModel,
 } from "../models";
 import { hashPassword } from "../utils/auth";
 import { createCargoEvent } from "../services/events/createEvent";
@@ -53,7 +52,6 @@ async function seed() {
     const demoSiteIds = (await SiteModel.find({ companyId: { $in: demoCompanyIds } }).select("_id")).map((x) => x._id);
     await Promise.all([
       VisionZoneModel.deleteMany({ siteId: { $in: demoSiteIds } }),
-      ZoneModel.deleteMany({ companyId: { $in: demoCompanyIds } }),
       CameraModel.deleteMany({ companyId: { $in: demoCompanyIds } }),
       SiteModel.deleteMany({ companyId: { $in: demoCompanyIds } }),
       CargoEventModel.deleteMany({ companyId: { $in: demoCompanyIds } }),
@@ -178,21 +176,7 @@ async function seed() {
       : "No CAMERA_RTSP_HOST set: seeded a fake DEMO stream instead."
   );
 
-  // 5. Zone (shutter-style polygon until the cargo zone model replaces it)
-  await ZoneModel.create({
-    cameraId: camera._id,
-    companyId: company._id,
-    siteId: north._id,
-    zoneType: "SHUTTER",
-    polygon: [
-      { x: 0.12, y: 0.22 },
-      { x: 0.88, y: 0.22 },
-      { x: 0.91, y: 0.91 },
-      { x: 0.1, y: 0.91 },
-    ],
-    sensitivity: "MEDIUM",
-    enabled: true,
-  });
+  // 5. Zones: the demo has one counting line, below.
   // A demo counting line, so loading sessions on the demo site have a line to count on. Monitoring is NOT started:
   // the site still shows "not monitored" until someone starts it and a worker reports.
   await VisionZoneModel.create({

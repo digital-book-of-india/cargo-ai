@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { CameraModel, ZoneModel } from "../../../models";
+import { CameraModel, VisionZoneModel } from "../../../models";
 import { logAuditEvent } from "../../../services/audit/logger";
 import { decryptSecret } from "../../../services/secrets/manager";
 
@@ -61,7 +61,7 @@ internalCamerasRouter.get(
         return;
       }
 
-      const zone = await ZoneModel.findOne({ cameraId: camera._id });
+      const zones = await VisionZoneModel.find({ cameraId: camera._id, status: "active" }).lean();
       const streamUrl = decryptSecret(camera.secretRef);
       await noteCredentialRead(camera, req.requestId);
 
@@ -71,14 +71,7 @@ internalCamerasRouter.get(
           companyId: (camera.companyId || (camera as any).shopId || camera._id).toString(),
           siteId: (camera.siteId || (camera as any).shopId || camera._id).toString(),
           streamUrl,
-          zone: zone
-            ? {
-                zoneType: zone.zoneType,
-                polygon: zone.polygon,
-                sensitivity: zone.sensitivity,
-                enabled: zone.enabled,
-              }
-            : null,
+          zones: zones.map((z) => ({ id: String(z._id), zoneType: z.zoneType, geometry: z.geometry, rules: z.rules })),
         },
       });
     } catch (err) {

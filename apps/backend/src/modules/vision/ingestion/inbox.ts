@@ -17,8 +17,10 @@ const ALERT_TYPES = new Set([
 
 // Hands an accepted worker event to the cargo event workflow (contract 2). The company comes from the
 // site, notifications go to the right reviewers, and the same eventKey is never stored twice.
-export async function forwardToInbox(input: VisionIngestInput): Promise<void> {
-  if (!ALERT_TYPES.has(input.eventType)) return;
+// Returns the inbox event id (null for counting-only events). It is safe to call again for the same eventKey: the
+// inbox stores one event per key, so a retry after a failed first attempt still reaches the inbox.
+export async function forwardToInbox(input: VisionIngestInput): Promise<string | null> {
+  if (!ALERT_TYPES.has(input.eventType)) return null;
 
   const base = {
     eventKey: input.eventKey,
@@ -34,13 +36,19 @@ export async function forwardToInbox(input: VisionIngestInput): Promise<void> {
 
   try {
     try {
-      await createCargoEvent({ ...base, evidence: input.evidence ?? undefined });
+      return String((await createCargoEvent({ ...base, evidence: input.evidence ?? undefined })).event._id);
     } catch (err) {
       // evidence that was not uploaded through our endpoint is refused: keep the event, drop the files
       if (!(err instanceof AppError) || err.status !== 400 || !input.evidence) throw err;
-      await createCargoEvent({ ...base, payload: { ...base.payload, evidenceUnavailable: true } });
+      return String((await createCargoEvent({ ...base, payload: { ...base.payload, evidenceUnavailable: true } })).event._id);
     }
   } catch (err) {
-    logger.warn("could not forward event to the inbox", { eventKey: input.eventKey, ...errorFields(err) });
+    // A refusal (4xx) is logged and the ingestion still succeeds: the vision event and the count are stored.
+    // A temporary failure (database, 5xx) is passed on, so the worker retries and the retry forwards it again.
+    if (err instanceof AppError && err.status < 500) {
+      logger.warn("could not forward event to the inbox", { eventKey: input.eventKey, ...errorFields(err) });
+      return null;
+    }
+    throw err;
   }
 }

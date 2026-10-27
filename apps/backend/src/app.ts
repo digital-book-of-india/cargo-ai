@@ -37,7 +37,6 @@ import { evidenceUploadRouter } from "./modules/internal/evidence-upload/routes"
 // Dev 2 (Vision) modules
 import { visionZonesRouter } from "./modules/vision/zones/routes";
 import { visionCountsRouter } from "./modules/vision/counts/routes";
-import { visionIngestRouter } from "./modules/vision/ingestion/routes";
 import { visionMonitoringRouter } from "./modules/vision/monitoring/routes";
 import { visionWorkerRouter } from "./modules/vision/monitoring/worker-routes";
 export const app = express();
@@ -164,9 +163,9 @@ v1.use("/admin/support", adminSupportRouter);
 const internal = express.Router();
 internal.use(serviceAuth);
 // The AI worker's gateway: Appendix A events, counting ledger, alert events forwarded to the inbox.
-internal.use("/ai/events", visionIngestRouter);
+internal.use("/ai/events", ingestRateLimiter, aiEventsRouter);
 internal.use("/monitoring", visionWorkerRouter); // worker heartbeat and config
-// Cargo events straight into the inbox (same handler as /api/v1/ai/events).
+// Same handler under its older name.
 internal.use("/ai/cargo-events", ingestRateLimiter, aiEventsRouter);
 // Metrics for the monitoring system (service token required). ?format=json for people.
 internal.get("/metrics", internalServiceAuth, async (req, res, next) => {
