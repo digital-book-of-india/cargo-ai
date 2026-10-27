@@ -1,4 +1,4 @@
-﻿import { Router, Request, Response } from "express";
+import { Router, Request, Response } from "express";
 import net from "net";
 import { Types } from "mongoose";
 import { assignCameraSiteSchema, cameraRegisterSchema, cameraUpdateSchema, zoneSchema } from "@dbi/validation";
@@ -302,6 +302,7 @@ cameraRouter.delete(
 // it must never be presented as live video (see CONTEXT_DEV1.md, open items).
 cameraRouter.get(
   "/:cameraId/preview",
+  ...requireCameraAccess("cameras:read"),
   async (req: Request, res: Response) => {
     // Generate clean 16:9 SVG test card frame with timestamp & camera ID
     const timeStr = new Date().toISOString();
@@ -312,7 +313,7 @@ cameraRouter.get(
         <line x1="640" y1="0" x2="640" y2="720" stroke="#334155" stroke-width="2" stroke-dasharray="8 8"/>
         <circle cx="640" cy="360" r="100" fill="none" stroke="#38bdf8" stroke-width="2"/>
         <text x="640" y="340" fill="#f8fafc" font-size="28" font-family="sans-serif" font-weight="600" text-anchor="middle">CAMERA PREVIEW FEED</text>
-        <text x="640" y="380" fill="#94a3b8" font-size="18" font-family="sans-serif" text-anchor="middle">ID: ${req.params.cameraId}</text>
+        <text x="640" y="380" fill="#94a3b8" font-size="18" font-family="sans-serif" text-anchor="middle">ID: ${req.camera!._id.toString()}</text>
         <text x="640" y="680" fill="#64748b" font-size="16" font-family="monospace" text-anchor="middle">${timeStr}</text>
       </svg>
     `.trim();
