@@ -1,5 +1,5 @@
 ﻿"""
-DBI Intelligence — Production AI Cargo Worker (Dev 2).
+CargoSense AI — Production AI Cargo Worker (Dev 2).
 Spec Aligned: Package detection, session-scoped tracking, line crossing
 with directional debounce (QA-04, QA-05), polygon zone events, snapshot upload,
 and idempotent event ingestion.
@@ -425,7 +425,7 @@ class CargoWorker:
 
     def run(self):
         print("=========================================")
-        print(f"  DBI Intelligence - Cargo AI Worker: {WORKER_ID}")
+        print(f"  CargoSense AI - Cargo AI Worker: {WORKER_ID}")
         print(f"  Backend: {BACKEND_URL}")
         print(f"  Session ID: {SESSION_ID}")
         print("=========================================")

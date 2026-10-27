@@ -6,7 +6,7 @@ import { ErrorState } from "@/components/common/States";
 // Last-resort screen for an unexpected crash inside a page. It never shows technical details.
 export default function RouteError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    document.title = "Something went wrong | DBI Intelligence";
+    document.title = "Something went wrong | CargoSense AI";
   }, []);
 
   return (

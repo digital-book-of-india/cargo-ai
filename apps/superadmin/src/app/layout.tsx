@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DBI Intelligence Admin",
+  title: "CargoSense AI Admin",
   description: "After-hours shutter and gate monitoring for shop owners.",
 };
 

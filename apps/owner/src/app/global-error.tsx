@@ -7,7 +7,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
     <html lang="en">
       <body style={{ fontFamily: "system-ui, sans-serif", margin: 0, padding: 24, color: "#0F172A" }}>
         <main style={{ maxWidth: 480, margin: "48px auto" }}>
-          <h1 style={{ fontSize: 22 }}>DBI Intelligence could not load</h1>
+          <h1 style={{ fontSize: 22 }}>CargoSense AI could not load</h1>
           <p>Something went wrong. Please try again. If it keeps happening, check back in a few minutes.</p>
           <button
             type="button"

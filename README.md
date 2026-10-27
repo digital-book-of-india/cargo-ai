@@ -1,4 +1,4 @@
-# DBI Intelligence: AI Cargo & Shipment Security
+# CargoSense AI: AI Cargo & Shipment Security
 
 Multi-company AI-assisted cargo monitoring for warehouses, logistics hubs and loading bays.
 It uses existing CCTV (RTSP) to detect and track visible packages, count line crossings,

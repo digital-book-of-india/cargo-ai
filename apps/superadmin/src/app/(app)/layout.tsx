@@ -87,7 +87,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col md:flex-row">
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-[#DBEAFE] shadow-sm">
         <div className="p-6 border-b border-[#DBEAFE]">
-          <h1 className="text-xl font-bold text-[#2563EB] tracking-tight">DBI Intelligence</h1>
+          <h1 className="text-xl font-bold text-[#2563EB] tracking-tight">CargoSense AI</h1>
           <p className="text-xs text-gray-500 font-medium">Super Admin Portal</p>
         </div>
         <nav className="flex-1 p-4 space-y-1">
@@ -124,7 +124,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
               </svg>
             </button>
-            <span className="text-lg font-semibold text-[#0F172A] md:hidden">DBI Intelligence</span>
+            <span className="text-lg font-semibold text-[#0F172A] md:hidden">CargoSense AI</span>
           </div>
 
           <div className="flex items-center space-x-4">

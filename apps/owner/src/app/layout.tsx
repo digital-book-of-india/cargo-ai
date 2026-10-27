@@ -6,7 +6,7 @@ import { AuthProvider } from "@/lib/auth/AuthProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DBI Intelligence",
+  title: "CargoSense AI",
   description: "AI cargo and shipment monitoring for warehouses.",
 };
 

@@ -30,7 +30,7 @@ const DEMO_USERS = {
 };
 
 async function seed() {
-  console.log("Starting DBI Intelligence database seed...");
+  console.log("Starting CargoSense AI database seed...");
   await connectDatabase();
 
   // 1. Clear previous DEMO data, including everything that belongs to a demo company.

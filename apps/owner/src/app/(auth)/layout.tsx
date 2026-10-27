@@ -50,7 +50,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             <span className="flex size-9 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/25">
               <ShieldCheck className="size-5" aria-hidden />
             </span>
-            <span className="text-lg font-bold tracking-tight">DBI Intelligence</span>
+            <span className="text-lg font-bold tracking-tight">CargoSense AI</span>
           </div>
 
           <div className="relative max-w-md">

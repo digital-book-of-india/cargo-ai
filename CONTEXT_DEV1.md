@@ -42,7 +42,7 @@ chose not to rotate it yet; never write it in any file).
 
 ## 1. Project in one paragraph
 
-DBI Intelligence is a multi-company AI cargo and shipment security product for warehouses, logistics hubs and
+CargoSense AI is a multi-company AI cargo and shipment security product for warehouses, logistics hubs and
 loading bays. It reads the customer's existing CCTV (RTSP), detects and tracks visible packages, counts line
 crossings (in/out), records loading/unloading, and compares observed counts with a manifest. Output is
 operator-reviewable events (camera, zone, time, snapshot, optional clip). AI output is a signal for a human to

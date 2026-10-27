@@ -1,4 +1,4 @@
-# DBI Intelligence - Owner web (Dev 1)
+# CargoSense AI - Owner web (Dev 1)
 
 Company users register a company, add sites (warehouses), connect CCTV cameras and review
 alerts. Next.js 14 (App Router) + TypeScript + Tailwind + shadcn-style components.

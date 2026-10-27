@@ -36,7 +36,7 @@ async function bootstrap() {
   if (evidenceDir) logger.info("evidence folder ready", { dir: evidenceDir });
 
   server = app.listen(env.port, () => {
-    logger.info("DBI Intelligence API listening", { port: env.port, env: env.nodeEnv });
+    logger.info("CargoSense AI API listening", { port: env.port, env: env.nodeEnv });
     startVisionMonitorJob();
   });
   process.on("SIGTERM", () => void shutdown("SIGTERM"));

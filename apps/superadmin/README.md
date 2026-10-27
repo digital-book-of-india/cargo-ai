@@ -1,4 +1,4 @@
-# DBI Intelligence - Super Admin web
+# CargoSense AI - Super Admin web
 
 Next.js + TypeScript + Tailwind. Runs on port 3001. For platform administrators only (a real user whose role is
 `PLATFORM_ADMIN`; there is no mock login).

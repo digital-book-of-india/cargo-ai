@@ -2,7 +2,7 @@ import Link from "next/link";
 import { EmptyState } from "@/components/common/States";
 import { Button } from "@/components/ui";
 
-export const metadata = { title: "Page not found | DBI Intelligence" };
+export const metadata = { title: "Page not found | CargoSense AI" };
 
 export default function NotFound() {
   return (

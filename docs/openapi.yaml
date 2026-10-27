@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: DBI Intelligence API
+  title: CargoSense AI API
   version: 0.1.0
   description: |
-    REST API of DBI Intelligence, AI Cargo & Shipment Security.
+    REST API of CargoSense AI, AI Cargo & Shipment Security.
 
     **Conventions**
     - Success: `{ "data": ..., "meta": { "requestId": "..." } }`. Errors: `{ "error": { "code", "message", "requestId" } }`.

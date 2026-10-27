@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl border border-[#DBEAFE] shadow-sm p-8 space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#2563EB] tracking-tight">DBI Intelligence</h1>
+          <h1 className="text-2xl font-bold text-[#2563EB] tracking-tight">CargoSense AI</h1>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">
             Privileged Super Admin Portal
           </p>

@@ -85,7 +85,7 @@ export function LoginForm() {
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
-        New to DBI Intelligence?{" "}
+        New to CargoSense AI?{" "}
         <Link href={registerHref} className="font-medium text-primary hover:underline">
           Create an account
         </Link>

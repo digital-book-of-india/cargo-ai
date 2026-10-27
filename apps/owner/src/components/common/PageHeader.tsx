@@ -15,7 +15,7 @@ export function PageHeader({
 }) {
   // each screen gets its own tab/window title
   useEffect(() => {
-    document.title = `${title} | DBI Intelligence`;
+    document.title = `${title} | CargoSense AI`;
   }, [title]);
 
   return (

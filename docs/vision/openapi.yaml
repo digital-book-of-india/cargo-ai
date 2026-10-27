@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: DBI Intelligence - Vision API (Dev 2)
+  title: CargoSense AI - Vision API (Dev 2)
   version: 0.2.0
   description: |
     Zones, counts, monitoring and AI ingestion. Owner endpoints use the user session

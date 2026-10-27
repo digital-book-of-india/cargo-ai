@@ -24,7 +24,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="animate-fade-up">
-      <PageHeader title="Welcome to DBI Intelligence" description="Let us get your site set up." />
+      <PageHeader title="Welcome to CargoSense AI" description="Let us get your site set up." />
       <EmptyState
         icon={<Store className="size-6" aria-hidden />}
         title="Start by creating your site"

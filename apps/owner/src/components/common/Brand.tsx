@@ -18,7 +18,7 @@ export function Brand({ className }: { className?: string }) {
   return (
     <span className={cn("flex items-center gap-2.5", className)}>
       <BrandMark />
-      <span className="text-lg font-bold tracking-tight">DBI Intelligence</span>
+      <span className="text-lg font-bold tracking-tight">CargoSense AI</span>
     </span>
   );
 }

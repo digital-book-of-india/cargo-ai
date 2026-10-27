@@ -1,4 +1,4 @@
-// Single source of truth for Mongoose models in DBI Intelligence
+// Single source of truth for Mongoose models in CargoSense AI
 export * from "./User";
 export * from "./Company";
 export * from "./CompanySettings";
