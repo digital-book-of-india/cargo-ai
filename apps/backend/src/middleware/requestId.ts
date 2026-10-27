@@ -2,9 +2,11 @@ import type { NextFunction, Request, Response } from "express";
 import { randomUUID } from "crypto";
 
 export function requestId(req: Request, res: Response, next: NextFunction) {
+  // A caller may supply its own request id for tracing, but only a short, plain one: it is copied into logs, audit
+  // rows and response bodies, so anything else (long, spaces, quotes, control characters) is replaced.
   const incomingId = req.headers["x-request-id"];
   const id =
-    typeof incomingId === "string" && incomingId.trim()
+    typeof incomingId === "string" && /^[A-Za-z0-9._-]{8,64}$/.test(incomingId.trim())
       ? incomingId.trim()
       : `req_${randomUUID()}`;
 

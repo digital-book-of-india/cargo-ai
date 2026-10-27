@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { getAdminAuditLogs, AuditLogItem, PaginationMeta } from "@/lib/api/admin";
 import { Pagination } from "@/components/common/Pagination";
+import { useLatestRequest } from "@/components/common/useLatestRequest";
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
@@ -16,7 +17,9 @@ export default function AuditLogsPage() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
+  const begin = useLatestRequest();
   const fetchLogs = (p = page) => {
+    const isCurrent = begin();
     setLoading(true);
     setError(null);
     getAdminAuditLogs({
@@ -27,6 +30,7 @@ export default function AuditLogsPage() {
       endDate: endDate || undefined,
     })
       .then((res: any) => {
+        if (!isCurrent()) return;
         if (res.error) {
           setError(res.error.message || "Failed to load audit trail.");
         } else {
@@ -34,8 +38,12 @@ export default function AuditLogsPage() {
           if (res.meta) setMeta(res.meta);
         }
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (isCurrent()) setError(err.message);
+      })
+      .finally(() => {
+        if (isCurrent()) setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -52,7 +60,7 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-[#0F172A]">Privileged Audit Trail</h2>
+        <h1 className="text-2xl font-bold text-[#0F172A]">Privileged Audit Trail</h1>
         <p className="text-sm text-gray-500 mt-1">Immutable record of all privileged administrative events.</p>
       </div>
 
@@ -66,6 +74,7 @@ export default function AuditLogsPage() {
       <form onSubmit={handleFilterSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-4 rounded-xl border border-[#DBEAFE] shadow-sm">
         <input
           type="text"
+          aria-label="Action"
           placeholder="Action (e.g. COMPANY_SUSPENDED)..."
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
@@ -74,6 +83,7 @@ export default function AuditLogsPage() {
 
         <input
           type="text"
+          aria-label="Target ID"
           placeholder="Target ID (e.g. a company or site ID)..."
           value={targetIdFilter}
           onChange={(e) => setTargetIdFilter(e.target.value)}
@@ -82,6 +92,7 @@ export default function AuditLogsPage() {
 
         <input
           type="date"
+          aria-label="From date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-[#2563EB]"
@@ -89,6 +100,7 @@ export default function AuditLogsPage() {
 
         <input
           type="date"
+          aria-label="To date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-[#2563EB]"

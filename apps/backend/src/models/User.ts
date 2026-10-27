@@ -8,6 +8,9 @@ export interface IUserDocument extends Document {
   passwordHash: string;
   role: Role;
   status: UserStatus;
+  tokenVersion?: number; // raised to end every sign-in of this user at once
+  failedLogins?: number;
+  lockedUntil?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +31,11 @@ const userSchema = new Schema<IUserDocument>(
       enum: ["ACTIVE", "SUSPENDED", "PENDING_VERIFICATION"],
       default: "ACTIVE",
     },
+    // A token carries the version it was issued with; raising this number ends all of the user's sign-ins.
+    tokenVersion: { type: Number, default: 0 },
+    // Wrong-password counter and lock, per account (the IP rate limit alone cannot stop a spread-out guessing attack).
+    failedLogins: { type: Number, default: 0 },
+    lockedUntil: { type: Date, default: null },
   },
   {
     timestamps: true,

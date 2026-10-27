@@ -21,6 +21,22 @@ Test files are in `apps/backend/src/test`.
 | QA-14 | Every route is documented | Auto | `openapi.int.test.ts` |
 | QA-15 | Worker events to reconciliation: zone enabled, monitoring started, crossings counted once per track, session mismatch raises one inbox event, alert-type worker events reach the inbox, counting-only ones do not | Auto | `chain.int.test.ts` |
 | QA-16 | Zone and monitoring changes follow the role table; operators and auditors cannot change them | Auto | `chain.int.test.ts` |
+| QA-17 | A loading session counts only the crossings of its own counting line; a line is required when the site has an enabled one; a line of another site, a draft line or an area is refused; one open session per line and direction | Auto | `chain.int.test.ts` |
+| QA-18 | Migration 20261101-101 parks old zone ids, keeps vision zone ids, runs twice safely and rolls back | Auto | `migration-sessions.int.test.ts` |
+| QA-19 | Every write that takes a foreign id (camera, zone, loading session, manifest, vehicle, site, assignee) refuses ids of another company | Auto | `phase12.int.test.ts` |
+| QA-20 | A false-positive event can be reopened; a tampered cursor answers 400; a failed CSV import can be sent again; a session cannot be backdated by days and its times are audited | Auto | `phase12.int.test.ts` |
+| QA-21 | A mismatch event that was not created at close time is created once by the repair step; a failed history write leaves the event unchanged | Auto | `phase12.int.test.ts` |
+| QA-22 | Old delivered notifications and old audit entries are deleted, undelivered notifications never | Auto | `phase12.int.test.ts` |
+| QA-24 | A camera name is unique within a site (any capitals) on create, rename and move; existing duplicates are renamed by migration 20261101-104 | Auto | `phase12.int.test.ts` |
+| QA-25 | Notifications store the event id as an ObjectId, the API still returns it as a string with the event, and migration 20261101-103 converts and reverses | Auto | `phase12.int.test.ts` |
+| QA-26 | Evidence of unresolved events is kept up to twice the retention period; resolved and dismissed events lose it at the period | Auto | `phase12.int.test.ts` |
+| QA-27 | Sessions: 12 h lifetime; sign-out ends every copy of the token; a suspended or demoted account stops at once; old tokens keep working until they expire; five wrong passwords lock the account; a wrong password reveals nothing about the account; simultaneous registrations give 201 and 409 | Auto | `phase13.int.test.ts` |
+| QA-28 | Camera addresses: metadata, link-local and invalid hosts refused on save and at test time (also when the stored address is changed behind the API); a TCP answer is not 'online' | Auto | `phase13.int.test.ts` |
+| QA-29 | Camera secrets: GCM, tamper detected, old values readable, plain text not trusted; migration 105 | Auto | `phase13.int.test.ts` |
+| QA-30 | Evidence links: refused when the holder is disabled or demoted, a sign-in token is not a link, a support grant is audited first | Auto | `phase13.int.test.ts` |
+| QA-31 | Audit: zone, monitoring, camera test, credential reads, support grant | Auto | `phase13.int.test.ts` |
+| QA-32 | Request-time histogram on the metrics endpoint; compressed list answers; the platform overview counts online cameras in the database | Auto | `phase14.int.test.ts`, `metrics.test.ts` |
+| QA-23 | Moving a camera moves its counting lines and monitor; moving or deleting it is refused while a session counts on it; deleting archives its lines and stops monitoring | Auto | `phase12.int.test.ts` |
 
 ## Manual walkthrough before each release (about 20 minutes)
 

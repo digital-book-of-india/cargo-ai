@@ -51,7 +51,7 @@ export default function SupportAccessPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h2 className="text-2xl font-bold text-[#0F172A]">Support access to evidence</h2>
+        <h1 className="text-2xl font-bold text-[#0F172A]">Support access to evidence</h1>
         <p className="text-sm text-gray-500 mt-1">
           Open one snapshot or clip of a company&apos;s event for troubleshooting. Every grant needs a written reason, is
           written to that company&apos;s own audit trail, and the link works for 2 minutes only.

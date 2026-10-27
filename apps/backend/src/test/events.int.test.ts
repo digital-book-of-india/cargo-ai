@@ -168,7 +168,7 @@ describe("events, evidence and platform standards (integration)", () => {
       const history = await mongoose.connection
         .collection("cargo_event_history")
         .countDocuments({ eventId: new mongoose.Types.ObjectId(eventId), action: "CREATED" });
-      const notes = await mongoose.connection.collection("notifications").countDocuments({ eventId });
+      const notes = await mongoose.connection.collection("notifications").countDocuments({ eventId: new mongoose.Types.ObjectId(eventId) });
       assert.equal(events, 1);
       assert.equal(history, 1);
       // reviewers with access to site 1: owner, manager, operator (the auditor cannot review)
@@ -460,6 +460,9 @@ describe("events, evidence and platform standards (integration)", () => {
       const oldId = await newEvent({ evidence: { snapshotObjectKey: oldKey }, occurredAt: new Date(Date.now() - 100 * 86400_000).toISOString() });
       const newKey = (await upload(s1.id, cam1.id)).body.data.objectKey;
       const newId = await newEvent({ evidence: { snapshotObjectKey: newKey } });
+      // an event nobody has dealt with keeps its picture for longer: close this one first so the period applies
+      assert.equal((await api.post(`/api/v1/events/${oldId}/acknowledge`, {}, { token: a.token })).status, 200);
+      assert.equal((await api.post(`/api/v1/events/${oldId}/resolve`, { outcome: "reviewed_no_issue", note: "checked" }, { token: a.token })).status, 200);
 
       assert.equal(await getEvidenceStorage().exists(oldKey), true);
       const first = await runEvidenceRetention(new Date(), 90);
@@ -496,9 +499,13 @@ describe("events, evidence and platform standards (integration)", () => {
       assert.deepEqual(await migrateUp(db, migrations), [], "running again applies nothing");
       assert.ok((await status(db, migrations)).every((s) => s.applied));
 
-      // the newest migrations only create indexes; the legacy rename is the one before them
-      const reverted = await migrateDown(db, migrations, 3);
-      assert.deepEqual(reverted, migrations.slice(-3).reverse().map((m) => m.id));
+      // roll back everything after the legacy rename, and the rename itself (counted by name, so adding newer
+      // migrations later does not break this test)
+      const renameAt = migrations.findIndex((m) => m.id.includes("archive-legacy-collections"));
+      assert.ok(renameAt >= 0);
+      const steps = migrations.length - renameAt;
+      const reverted = await migrateDown(db, migrations, steps);
+      assert.deepEqual(reverted, migrations.slice(renameAt).reverse().map((m) => m.id));
       assert.ok((await names()).includes("shops"), "rolled back: the old collection is back");
       assert.equal(await db.collection("shops").countDocuments(), 1);
 

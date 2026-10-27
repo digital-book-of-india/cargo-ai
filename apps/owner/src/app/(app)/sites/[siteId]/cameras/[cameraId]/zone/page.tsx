@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { apiAssetUrl } from "@/lib/api/client";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -277,7 +278,7 @@ export default function CargoZonePage() {
             countDirection={direction}
             onChange={setPoints}
             disabled={saving}
-            backgroundUrl={`/api/v1/cameras/${cameraId}/preview`}
+            backgroundUrl={apiAssetUrl(`/api/v1/cameras/${cameraId}/preview`)}
           />
 
           {selectedZone && (

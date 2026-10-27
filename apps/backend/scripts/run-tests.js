@@ -19,5 +19,5 @@ if (files.length === 0) {
   console.log("no test files found");
   process.exit(0);
 }
-const res = spawnSync(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", ...files], { stdio: "inherit" });
+const res = spawnSync(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", ...files], { stdio: "inherit", env: { ...process.env, NODE_ENV: process.env.NODE_ENV || "test" } });
 process.exit(res.status ?? 1);

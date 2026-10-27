@@ -61,7 +61,7 @@ const cargoEventSchema = new Schema<ICargoEventDocument>(
     companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
     siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true },
     cameraId: { type: Schema.Types.ObjectId, ref: "Camera", required: true },
-    zoneId: { type: Schema.Types.ObjectId, ref: "Zone", default: null },
+    zoneId: { type: Schema.Types.ObjectId, ref: "VisionZone", default: null },
     loadingSessionId: { type: Schema.Types.ObjectId, default: null },
     eventKey: { type: String, required: true, maxlength: 200 },
     eventType: {
@@ -118,6 +118,9 @@ cargoEventSchema.index({ companyId: 1, eventKey: 1 }, { unique: true });
 cargoEventSchema.index({ companyId: 1, occurredAt: -1 });
 cargoEventSchema.index({ companyId: 1, status: 1, occurredAt: -1 });
 cargoEventSchema.index({ companyId: 1, siteId: 1, occurredAt: -1 });
+// the inbox and the reports filter by camera and by counting line
+cargoEventSchema.index({ companyId: 1, cameraId: 1, occurredAt: -1 });
+cargoEventSchema.index({ companyId: 1, zoneId: 1, occurredAt: -1 });
 
 export const CargoEventModel =
   (mongoose.models.CargoEvent as mongoose.Model<ICargoEventDocument>) ||

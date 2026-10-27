@@ -39,6 +39,23 @@ describe("cargo chain: worker events to reconciliation (integration)", () => {
       { headers: { ...SERVICE(), "idempotency-key": eventKey } }
     );
   };
+  const crossingAt = (line: string, trackId: string, direction: "IN" | "OUT") => crossing(trackId, direction, { zoneId: line });
+  const lineBody = (sId: string, cId: string, name: string, y: number) => ({
+    siteId: sId,
+    cameraId: cId,
+    name,
+    zoneType: "counting_line",
+    geometry: { coordinateSpace: "normalized_0_1", line: [[0.2, y], [0.8, y]] },
+    rules: { objectClasses: ["box"], minimumConfidence: 0.5, countDirection: "EITHER", countOncePerTrackPerRule: true },
+  });
+  const makeActiveLine = async (sId: string, cId: string, name: string, y: number): Promise<string> => {
+    const created = await api.post("/api/v1/zones", lineBody(sId, cId, name, y), { token });
+    assert.equal(created.status, 201, created.raw);
+    const id = created.body.data.zone.id as string;
+    assert.equal((await api.post(`/api/v1/zones/${id}/validate`, {}, { token })).body.data.passed, true);
+    assert.equal((await api.post(`/api/v1/zones/${id}/enable`, {}, { token })).status, 200);
+    return id;
+  };
   const startSession = (body: Record<string, unknown>) => api.post("/api/v1/loading-sessions", body, { token });
   const closeSession = (id: string) => api.post(`/api/v1/loading-sessions/${id}/close`, {}, { token });
   const manifest = (reference: string, count: number) =>
@@ -106,7 +123,7 @@ describe("cargo chain: worker events to reconciliation (integration)", () => {
 
   it("counts worker crossings once per track and reconciles the session (100 vs 94 style mismatch)", async () => {
     const m = (await manifest("CHAIN-1", 10)).body.data.manifest;
-    const s = (await startSession({ siteId, manifestId: m.id, direction: "outbound" })).body.data.session;
+    const s = (await startSession({ siteId, zoneId, manifestId: m.id, direction: "outbound" })).body.data.session;
 
     // 4 distinct packages go OUT, one goes IN, one OUT track is reported twice, one is below the confidence floor
     for (const t of ["t1", "t2", "t3", "t4"]) {
@@ -144,6 +161,78 @@ describe("cargo chain: worker events to reconciliation (integration)", () => {
 
     const events = await api.get("/api/v1/events?eventType=count_mismatch", { token });
     assert.equal(events.body.data.items.filter((e: any) => e.id === closed.body.data.mismatchEvent.id).length, 1);
+  });
+
+  it("a session must name the counting line when the site has one", async () => {
+    const res = await startSession({ siteId, direction: "outbound" });
+    assert.equal(res.status, 422, res.raw);
+    assert.match(res.body.error.message, /counting line/i);
+  });
+
+  it("refuses a line that cannot be used for a session", async () => {
+    const site2 = (await api.post("/api/v1/sites", { name: "Yard", code: "Y1" }, { token })).body.data.site.id as string;
+    const cam2 = (await api.post(`/api/v1/sites/${site2}/cameras`, { name: "Yard cam", protocol: "RTSP", host: "192.0.2.20" }, { token })).body.data.camera.id as string;
+    const otherSiteLine = await makeActiveLine(site2, cam2, "Yard line", 0.5);
+    assert.equal((await startSession({ siteId, zoneId: otherSiteLine, direction: "outbound" })).status, 400, "a line of another site");
+    assert.equal((await startSession({ siteId, zoneId: "a".repeat(24), direction: "outbound" })).status, 400, "an unknown id");
+
+    const draft = (await api.post("/api/v1/zones", lineBody(siteId, cameraId, "Draft line", 0.45), { token })).body.data.zone.id as string;
+    assert.equal((await startSession({ siteId, zoneId: draft, direction: "outbound" })).status, 422, "a line that was never enabled");
+
+    const area = await api.post(
+      "/api/v1/zones",
+      {
+        siteId,
+        cameraId,
+        name: "Restricted area",
+        zoneType: "restricted",
+        geometry: { coordinateSpace: "normalized_0_1", polygon: [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]] },
+        rules: { objectClasses: ["box"], minimumConfidence: 0.5, countOncePerTrackPerRule: true },
+      },
+      { token }
+    );
+    assert.equal(area.status, 201, area.raw);
+    const areaId = area.body.data.zone.id as string;
+    await api.post(`/api/v1/zones/${areaId}/validate`, {}, { token });
+    await api.post(`/api/v1/zones/${areaId}/enable`, {}, { token });
+    assert.equal((await startSession({ siteId, zoneId: areaId, direction: "outbound" })).status, 422, "an area is not a counting line");
+  });
+
+  it("a session counts only the crossings of its own line", async () => {
+    const lineB = await makeActiveLine(siteId, cameraId, "Second line", 0.3);
+    const m = (await manifest("CHAIN-SCOPE", 2)).body.data.manifest;
+    const s = (await startSession({ siteId, zoneId, manifestId: m.id, direction: "outbound" })).body.data.session;
+    assert.equal(s.zone?.id, zoneId, "the session shows its line");
+    for (const t of ["a1", "a2"]) assert.equal((await crossing(`${s.id}-${t}`, "OUT")).status, 202);
+    for (const t of ["b1", "b2", "b3"]) assert.equal((await crossingAt(lineB, `${s.id}-${t}`, "OUT")).status, 202);
+    const closed = await closeSession(s.id);
+    assert.equal(closed.status, 200, closed.raw);
+    assert.equal(closed.body.data.session.observedCount, 2, "the three crossings on the other line are not counted");
+    assert.equal(closed.body.data.session.reconciliationStatus, "matched");
+  });
+
+  it("allows one open session per line and direction", async () => {
+    const lineC = await makeActiveLine(siteId, cameraId, "Third line", 0.7);
+    const first = await startSession({ siteId, zoneId: lineC, direction: "outbound" });
+    assert.equal(first.status, 201, first.raw);
+    const second = await startSession({ siteId, zoneId: lineC, direction: "outbound" });
+    assert.equal(second.status, 409, second.raw);
+    assert.match(second.body.error.message, /counting line/i);
+    assert.equal((await startSession({ siteId, zoneId: lineC, direction: "inbound" })).status, 201, "the other direction is a different session");
+    assert.equal((await closeSession(first.body.data.session.id)).status, 200);
+    assert.equal((await startSession({ siteId, zoneId: lineC, direction: "outbound" })).status, 201, "closing frees the line");
+  });
+
+  it("the mismatch event carries the line and the camera of that line", async () => {
+    const m = (await manifest("CHAIN-EVENT", 5)).body.data.manifest;
+    const s = (await startSession({ siteId, zoneId, manifestId: m.id, direction: "outbound" })).body.data.session;
+    assert.equal((await crossing(`${s.id}-e1`, "OUT")).status, 202);
+    const closed = await closeSession(s.id);
+    assert.equal(closed.body.data.session.reconciliationStatus, "review_required", closed.raw);
+    const event = await api.get(`/api/v1/events/${closed.body.data.mismatchEvent.id}`, { token });
+    assert.equal(event.status, 200, event.raw);
+    assert.equal(event.body.data.event.zoneId, zoneId);
+    assert.equal(event.body.data.event.cameraId, cameraId);
   });
 
   it("alert-type worker events reach the inbox; counting-only events do not", async () => {

@@ -8,7 +8,7 @@ import {
   type LoadingSession,
   type Shift,
 } from "@dbi/api-types";
-import { CameraModel, CargoEventModel, LoadingSessionModel, SiteModel, ZoneModel } from "../../models";
+import { CameraModel, CargoEventModel, LoadingSessionModel, SiteModel, VisionZoneModel } from "../../models";
 import type { ICargoEventDocument } from "../../models";
 import { asyncHandler, guard } from "../../middleware/auth";
 import { AppError } from "../../middleware/errorHandler";
@@ -249,8 +249,8 @@ reportsRouter.get(
 // GET /reports/events/export - CSV of the events matching the filters
 reportsRouter.get(
   "/events/export",
-  exportRateLimiter,
   ...guard("reports:export"),
+  exportRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const f = await parseFilters(req);
     const { events, sites, truncated } = await loadEvents(req, f);
@@ -261,7 +261,7 @@ reportsRouter.get(
     const cameras = await CameraModel.find({ _id: { $in: [...new Set(events.map((e) => e.cameraId.toString()))] } }).select("name").lean();
     const cameraName = new Map(cameras.map((c) => [c._id.toString(), c.name]));
     const zoneIds = [...new Set(events.map((e) => e.zoneId?.toString()).filter(Boolean) as string[])];
-    const zones = zoneIds.length ? await ZoneModel.find({ _id: { $in: zoneIds } }).select("zoneType").lean() : [];
+    const zones = zoneIds.length ? await VisionZoneModel.find({ _id: { $in: zoneIds } }).select("zoneType").lean() : [];
     const zoneType = new Map(zones.map((z) => [z._id.toString(), z.zoneType]));
 
     const rows = events.map((e) => {

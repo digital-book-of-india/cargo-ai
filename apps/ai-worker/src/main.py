@@ -1,4 +1,4 @@
-﻿"""
+"""
 CargoSense AI — Production AI Cargo Worker (Dev 2).
 Spec Aligned: Package detection, session-scoped tracking, line crossing
 with directional debounce (QA-04, QA-05), polygon zone events, snapshot upload,
@@ -446,6 +446,8 @@ class CargoWorker:
             time.sleep(1)
 
 def main():
+    if len(AI_SERVICE_TOKEN) < MIN_TOKEN_LENGTH:
+        sys.exit(f"AI_SERVICE_TOKEN must be set and at least {MIN_TOKEN_LENGTH} characters (same value as the API).")
     worker = CargoWorker()
     try:
         worker.run()

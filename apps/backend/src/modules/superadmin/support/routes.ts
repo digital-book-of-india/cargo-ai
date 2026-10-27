@@ -35,9 +35,8 @@ adminSupportRouter.post("/evidence-link", async (req: Request, res: Response) =>
       return sendError(res, "NOT_FOUND", "No evidence file of that kind is recorded for this event.", 404, requestId);
     }
 
-    // short expiry: support looks at it now, not later
-    const link = signEvidenceUrl(eventId, kind, { companyId: event.companyId.toString(), userId: adminReq.user!.id }, 120);
-
+    // The audit entry is written FIRST and must succeed: no record, no link. The link is short-lived (support looks
+    // at it now, not later) and is marked as a support link so it is checked against the administrator when used.
     await logAuditEvent({
       actorUserId: adminReq.user!.id,
       companyId: event.companyId.toString(),
@@ -47,7 +46,9 @@ adminSupportRouter.post("/evidence-link", async (req: Request, res: Response) =>
       reason,
       requestId,
       metadata: { kind, via: "platform-admin" },
+      required: true,
     });
+    const link = signEvidenceUrl(eventId, kind, { companyId: event.companyId.toString(), userId: adminReq.user!.id, support: true }, 120);
 
     return sendSuccess(res, link, undefined, requestId);
   } catch (error) {

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { safeNextPath } from "../lib/auth";
 import { friendlyMessage } from "../lib/api/messages";
 import { ApiError } from "../lib/api/errors";
+import { apiAssetUrl } from "../lib/api/client";
 import { clamp01, round4, polygonArea, isSelfIntersecting, validateZonePoints } from "../lib/zone";
 import { checkHost, checkPort, timeAgo } from "../lib/camera";
 
@@ -133,5 +134,16 @@ describe("Audit wording and report dates", () => {
     assert.equal(auditLabel("SOMETHING_NEW_HAPPENED"), "Something new happened");
     assert.equal(isoDay(new Date(2026, 2, 5)), "2026-03-05");
     assert.ok(new Date(dayStart("2026-03-05")) < new Date(dayEnd("2026-03-05")));
+  });
+});
+
+describe("Pictures and clips are requested from the API host", () => {
+  it("a path from the API is given the API's address, anything else is left alone", () => {
+    // NEXT_PUBLIC_API_BASE_URL is not set in the unit tests, so the development default applies
+    assert.equal(apiAssetUrl("/api/v1/evidence/abc/snapshot?token=t"), "http://localhost:4000/api/v1/evidence/abc/snapshot?token=t");
+    assert.equal(apiAssetUrl("/api/v1/cameras/c1/preview"), "http://localhost:4000/api/v1/cameras/c1/preview");
+    assert.equal(apiAssetUrl("https://files.example.test/x.jpg"), "https://files.example.test/x.jpg");
+    assert.equal(apiAssetUrl("//evil.example/x.jpg"), "//evil.example/x.jpg", "a protocol-relative address is never rewritten into the API host");
+    assert.equal(apiAssetUrl("blob:abc"), "blob:abc");
   });
 });

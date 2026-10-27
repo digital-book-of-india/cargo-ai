@@ -33,12 +33,13 @@ export function buildObjectKey(companyId: string, siteId: string, contentType: s
   return `${companyId}/${siteId}/${now.getUTCFullYear()}/${month}/${crypto.randomUUID()}.${meta.ext}`;
 }
 
-// True only for a well-formed key that belongs to this company. Used when an event arrives
-// that references evidence the worker uploaded earlier.
-export function keyBelongsToCompany(companyId: string, key: string): boolean {
+// True only for a well-formed key that belongs to this company, and to this site when a site is given. Used when an
+// event arrives that references evidence the worker uploaded earlier: a file stored for one site cannot be attached
+// to an event of another site.
+export function keyBelongsToCompany(companyId: string, key: string, siteId?: string): boolean {
   if (typeof key !== "string" || key.length === 0 || key.length > 1024) return false;
   if (key.includes("..") || key.includes("\\") || key.startsWith("/") || key.includes("\0")) return false;
-  return key.startsWith(`${companyId}/`);
+  return key.startsWith(siteId ? `${companyId}/${siteId}/` : `${companyId}/`);
 }
 
 export interface SavedEvidence {

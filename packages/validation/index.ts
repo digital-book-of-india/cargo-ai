@@ -7,22 +7,24 @@ z.config({ customError: (issue) => (issue.code === "invalid_type" && issue.input
 
 export const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
-  password: z.string().min(1, "Password is required"),
+  password: z.string().min(1, "Password is required").max(256, "Password is too long"),
+  // "admin": sign in to the platform-admin panel (own cookie, platform administrators only, no token in the answer)
+  panel: z.enum(["admin"]).optional(),
 });
 
 export const registerSchema = z.object({
-  name: z.string().trim().min(1, "Name is required"),
+  name: z.string().trim().min(1, "Name is required").max(120, "Name is too long"),
   email: z.string().email("Enter a valid email"),
-  password: z.string().min(8, "Use at least 8 characters"),
+  password: z.string().min(8, "Use at least 8 characters").max(72, "Use at most 72 characters"),
   companyName: z.string().trim().min(1).max(160).optional(),
 });
 
 const timezone = z.string().min(1, "Timezone is required");
 
 export const siteAddressSchema = z.object({
-  city: z.string().optional(),
-  state: z.string().optional(),
-  postalCode: z.string().optional(),
+  city: z.string().max(120).optional(),
+  state: z.string().max(120).optional(),
+  postalCode: z.string().max(20).optional(),
 });
 
 const siteCode = z
@@ -68,8 +70,8 @@ export const inviteUserSchema = z.object({
 
 export const acceptInvitationSchema = z.object({
   token: z.string().min(1, "Invitation token is required"),
-  name: z.string().trim().min(1, "Name is required"),
-  password: z.string().min(8, "Use at least 8 characters"),
+  name: z.string().trim().min(1, "Name is required").max(120, "Name is too long"),
+  password: z.string().min(8, "Use at least 8 characters").max(72, "Use at most 72 characters"),
 });
 
 export const changeMemberRoleSchema = z.object({
@@ -95,23 +97,23 @@ export const zoneSchema = z.object({
 });
 
 export const cameraRegisterSchema = z.object({
-  name: z.string().trim().min(1, "Camera name is required"),
+  name: z.string().trim().min(1, "Camera name is required").max(120, "Camera name is too long"),
   protocol: z.enum(["RTSP", "ONVIF"]),
-  host: z.string().trim().min(1, "Camera host or IP is required"),
+  host: z.string().trim().min(1, "Camera host or IP is required").max(253, "Camera host is too long"),
   port: z.number().int().min(1).max(65535).optional(),
-  username: z.string().trim().optional(),
-  password: z.string().optional(),
-  path: z.string().trim().optional(),
+  username: z.string().trim().max(128, "Username is too long").optional(),
+  password: z.string().max(256, "Password is too long").optional(),
+  path: z.string().trim().max(256, "Path is too long").optional(),
 });
 
 export const cameraUpdateSchema = z.object({
-  name: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1).max(120, "Camera name is too long").optional(),
   protocol: z.enum(["RTSP", "ONVIF"]).optional(),
-  host: z.string().trim().min(1).optional(),
+  host: z.string().trim().min(1).max(253, "Camera host is too long").optional(),
   port: z.number().int().min(1).max(65535).optional(),
-  username: z.string().trim().optional(),
-  password: z.string().optional(),
-  path: z.string().trim().optional(),
+  username: z.string().trim().max(128, "Username is too long").optional(),
+  password: z.string().max(256, "Password is too long").optional(),
+  path: z.string().trim().max(256, "Path is too long").optional(),
 });
 
 export const updateSiteStatusSchema = z.object({

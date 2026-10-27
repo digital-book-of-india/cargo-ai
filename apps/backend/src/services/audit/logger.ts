@@ -2,7 +2,9 @@ import type { Request } from "express";
 import { AuditLogModel } from "../../models";
 
 export interface LogAuditOptions {
-  actorUserId: string;
+  actorUserId?: string | null; // empty for the system itself
+  /** when true a failed audit write is thrown, so the action it describes must not go ahead */
+  required?: boolean;
   companyId?: string | null;
   action: string;
   targetType: string;
@@ -15,7 +17,7 @@ export interface LogAuditOptions {
 export async function logAuditEvent(options: LogAuditOptions): Promise<void> {
   try {
     await AuditLogModel.create({
-      actorUserId: options.actorUserId,
+      actorUserId: options.actorUserId ?? null,
       companyId: options.companyId ?? null,
       action: options.action,
       targetType: options.targetType,
@@ -25,6 +27,7 @@ export async function logAuditEvent(options: LogAuditOptions): Promise<void> {
       metadata: options.metadata,
     });
   } catch (err) {
+    if (options.required) throw err;
     console.error("Failed to log audit event:", err);
   }
 }

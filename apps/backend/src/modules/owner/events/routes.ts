@@ -156,7 +156,7 @@ async function listEvents(req: Request, siteScope: Types.ObjectId | Types.Object
 
   const [rows, total] = await Promise.all([
     CargoEventModel.find(query).sort({ occurredAt: -1, _id: -1 }).limit(limit + 1),
-    CargoEventModel.countDocuments(filter),
+    CargoEventModel.countDocuments(filter, { limit: LIST_TOTAL_CAP }),
   ]);
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
@@ -202,22 +202,31 @@ async function applyTransition(
   );
   if (!updated) throw new AppError(409, "CONFLICT", "This event was changed by someone else. Reload and try again.");
 
-  await EventHistoryModel.create({
-    companyId: event.companyId,
-    eventId: event._id,
-    actorUserId: req.user!.id,
-    action: step.action,
-    fromStatus: from,
-    toStatus: step.to,
-    note: step.note ?? null,
-    metadata: step.metadata ?? {},
-  });
+  try {
+    await EventHistoryModel.create({
+      companyId: event.companyId,
+      eventId: event._id,
+      actorUserId: req.user!.id,
+      action: step.action,
+      fromStatus: from,
+      toStatus: step.to,
+      note: step.note ?? null,
+      metadata: step.metadata ?? {},
+    });
+  } catch (err) {
+    // no history, no change: put the status back (only if nobody moved it meanwhile) and report the failure
+    await CargoEventModel.updateOne({ _id: event._id, companyId: event.companyId, status: step.to }, { $set: { status: from } });
+    throw err;
+  }
   await auditFromRequest(req, `EVENT_${step.action}`, "Event", event._id.toString(), {
     reason: step.note ?? undefined,
     metadata: { from, to: step.to, ...(step.metadata ?? {}) },
   });
   return updated;
 }
+
+// `total` in a list answer stops counting here (a value equal to this means "this many or more").
+const LIST_TOTAL_CAP = 10_001;
 
 async function detailFor(req: Request, event: ICargoEventDocument): Promise<CargoEventDetail> {
   const who: Who = { companyId: req.tenant!.companyId, userId: req.user!.id };
@@ -519,7 +528,7 @@ eventRouter.post(
   })
 );
 
-// POST /api/v1/events/:eventId/reopen - only a resolved event, only with the reopen permission
+// POST /api/v1/events/:eventId/reopen - a resolved or false-positive event, only with the reopen permission
 eventRouter.post(
   "/:eventId/reopen",
   ...guard("events:reopen"),
@@ -528,10 +537,11 @@ eventRouter.post(
     if (!parsed.success) throw badRequest(parsed, "A reason is required");
     const event = await loadEvent(req);
     if (!canReopen(event.status)) {
-      throw new AppError(409, "CONFLICT", "Only a resolved event can be reopened.");
+      throw new AppError(409, "CONFLICT", "Only a resolved or false-positive event can be reopened.");
     }
+    const from = event.status;
     const updated = await CargoEventModel.findOneAndUpdate(
-      { _id: event._id, companyId: event.companyId, status: "resolved" },
+      { _id: event._id, companyId: event.companyId, status: from },
       { $set: { status: "open", resolution: null, assignedTo: null } },
       { new: true }
     );
@@ -542,13 +552,13 @@ eventRouter.post(
       eventId: event._id,
       actorUserId: req.user!.id,
       action: "REOPENED",
-      fromStatus: "resolved",
+      fromStatus: from,
       toStatus: "open",
       note: parsed.data.note,
     });
     await auditFromRequest(req, "EVENT_REOPENED", "Event", event._id.toString(), {
       reason: parsed.data.note,
-      metadata: { from: "resolved", to: "open" },
+      metadata: { from, to: "open" },
     });
     res.json({ data: { event: await detailFor(req, updated) } });
   })

@@ -13,10 +13,10 @@ Commands run from `apps/backend` (or inside the backend container, where `npm ru
 4. Start the new version. Wait for `GET /health/ready` to answer 200 (it checks the database and the
    evidence storage). The old version keeps serving until the new one is ready if the platform does
    rolling restarts.
-5. Smoke test: sign in, open Alerts, open Shipments, `GET /internal/v1/metrics` shows `dbi_db_connected 1`.
+5. Smoke test: sign in, open Alerts, open Shipments, `GET /internal/v1/metrics` shows `cargosense_db_connected 1`.
 6. Scheduled jobs (cron or the platform scheduler; the `scheduler` service in `infra/docker-compose.prod.yml` already runs both):
-   - `npm run job:notifications` every minute (delivers and retries notifications)
-   - `npm run job:retention` once a day (deletes evidence files past each company's retention)
+   - `npm run job:notifications` every minute (delivers and retries notifications, and creates any count-mismatch event that could not be created when a session was closed)
+   - `npm run job:retention` once a day (deletes evidence files past each company's retention, and old delivered notifications and old audit entries)
 
 ## 2. Backups
 
@@ -57,6 +57,8 @@ Drill checklist: restore to a scratch database, run `migrate`, start the API aga
 known user, open an event with evidence (restore the evidence folder too), compare counts with
 `manifest.json`. Record the date and the result.
 
+**Restore drill record.** 2026-10-27, backup `cargo_ai-2026-10-27T10-36-20` (32 collections, 73 documents) restored into a scratch database on the same cluster, then the four migrations that were pending at backup time were applied to the restored copy. Result: PASS. Every collection count matched the backup manifest (0 differences), the demo owner account was present, all 4 camera secrets could be read with the current key (and were re-encrypted to the new format), the unique camera-name index and the ObjectId notification ids were in place, and the scratch database was dropped. Not covered by this drill: starting the API against the copy and signing in, and restoring the evidence files. Repeat it every quarter and after a major change, and write the result here.
+
 The automated test `ops.int.test.ts` already proves the round trip (types preserved, damaged backup
 refused, existing data protected); the drill proves your real backups and your real environment.
 
@@ -81,12 +83,13 @@ Suggested alerts:
 
 | Metric | Alert when |
 |---|---|
-| `dbi_db_connected` | is 0 for 1 minute |
-| `dbi_http_errors_total` | grows faster than 5 per minute |
-| `dbi_event_lag_seconds{stat="max"}` | over 60 for 5 minutes (pipeline or API is behind) |
-| `dbi_notifications_oldest_pending_seconds` | over 600 (the notification job is not running) |
-| `dbi_notifications_queue_depth{status="FAILED"}` | rises (people are not being told; check the channel) |
+| `cargosense_db_connected` | is 0 for 1 minute |
+| `cargosense_http_errors_total` | grows faster than 5 per minute |
+| `cargosense_event_lag_seconds{stat="max"}` | over 60 for 5 minutes (pipeline or API is behind) |
+| `cargosense_notifications_oldest_pending_seconds` | over 600 (the notification job is not running) |
+| `cargosense_notifications_queue_depth{status="FAILED"}` | rises (people are not being told; check the channel) |
 | `/health/ready` | not 200 for 2 minutes |
+| 95th percentile of request time | over 0.5 s for 10 minutes: `histogram_quantile(0.95, sum(rate(cargosense_http_request_duration_seconds_bucket[5m])) by (le))`. Per route: `cargosense_http_route_duration_seconds_bucket` (the `route` label). |
 
 Logs are JSON lines on stdout: `ts, level, msg, requestId, method, path, status, durationMs, userId, companyId`.
 The `requestId` is also in every error body and in the `X-Request-Id` header, so a user report with an error
@@ -105,6 +108,8 @@ code can be traced to one log line. Query strings, headers and bodies are never 
 
 ## 7. Not yet verified
 
+- CI builds all four Docker images on every push and starts the backend image against a real replica set (`images` job in `.github/workflows/ci.yml`). That is the first real test of the Docker files: if it fails, fix the file before deploying. The production compose file itself has still not been run.
+- Not done, on purpose: the panel image still contains the build tools (a Next "standalone" image needs a machine with Docker to verify); the compose MongoDB has no password (it is not published outside the compose network; with a replica set a password also needs a key file, which is easy to get wrong blind: use Atlas for anything shared); the AI worker has no container health check (its health is the heartbeat the API already tracks); metric names keep the `dbi_` prefix so the alert rules above keep working.
 - MongoDB must be a replica set (Atlas is; the compose files start a single-node one). Vision ingestion writes an event and its
   count in one transaction, which a standalone server refuses.
 - The Dockerfiles and `infra/docker-compose.prod.yml` were written but could not be built on the machine

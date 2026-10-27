@@ -37,6 +37,10 @@ const cameraSchema = new Schema<ICameraDocument>(
   }
 );
 
+// A camera name is unique within a site, whatever the capitals: two "Gate cam" at one site cannot be told apart in
+// alerts and reports. The same name at another site is fine.
+cameraSchema.index({ siteId: 1, name: 1 }, { unique: true, collation: { locale: "en", strength: 2 } });
+
 export const CameraModel =
   (mongoose.models.Camera as mongoose.Model<ICameraDocument>) ||
   model<ICameraDocument>("Camera", cameraSchema);

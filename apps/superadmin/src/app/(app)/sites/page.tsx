@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { getAdminSites, updateSiteStatus, SiteItem, PaginationMeta } from "@/lib/api/admin";
 import { Pagination } from "@/components/common/Pagination";
+import { ModalBehavior } from "@/components/common/ModalBehavior";
+import { useLatestRequest } from "@/components/common/useLatestRequest";
 
 export default function SitesPage() {
   const [sites, setSites] = useState<SiteItem[]>([]);
@@ -19,7 +21,9 @@ export default function SitesPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
 
+  const begin = useLatestRequest();
   const fetchSites = (targetPage = page) => {
+    const isCurrent = begin();
     setLoading(true);
     setErrorMessage(null);
     getAdminSites({
@@ -28,11 +32,16 @@ export default function SitesPage() {
       status: statusFilter !== "ALL" ? statusFilter : undefined,
     })
       .then((res: any) => {
+        if (!isCurrent()) return;
         setSites(res.sites || []);
         if (res.meta) setMeta(res.meta);
       })
-      .catch((err) => setErrorMessage(err.message || "Failed to load sites."))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (isCurrent()) setErrorMessage(err.message || "Failed to load sites.");
+      })
+      .finally(() => {
+        if (isCurrent()) setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -72,7 +81,7 @@ export default function SitesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-[#0F172A]">Sites</h2>
+        <h1 className="text-2xl font-bold text-[#0F172A]">Sites</h1>
         <p className="text-sm text-gray-500 mt-1">Review warehouses and sites across all companies.</p>
       </div>
 
@@ -218,8 +227,16 @@ export default function SitesPage() {
 
       {selectedSite && modalAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
-            <h3 className="text-lg font-bold text-[#0F172A]">
+          <div role="dialog" aria-modal="true" aria-labelledby="site-modal-title" className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <ModalBehavior
+              disabled={submitting}
+              onClose={() => {
+                setSelectedSite(null);
+                setModalAction(null);
+                setReason("");
+              }}
+            />
+            <h3 id="site-modal-title" className="text-lg font-bold text-[#0F172A]">
               {modalAction === "INACTIVE" ? "Deactivate Site" : "Reactivate Site"}
             </h3>
 
@@ -232,10 +249,11 @@ export default function SitesPage() {
             </p>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
+              <label htmlFor="site-reason" className="block text-xs font-bold text-gray-700 mb-1">
                 Mandatory Audit Reason <span className="text-red-500">*</span>
               </label>
               <textarea
+                id="site-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Reason (minimum 5 characters)..."

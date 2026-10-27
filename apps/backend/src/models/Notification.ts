@@ -3,7 +3,7 @@ import mongoose, { Schema, model, Document, Types } from "mongoose";
 export interface INotificationDocument extends Document {
   _id: Types.ObjectId;
   companyId: Types.ObjectId;
-  eventId?: string; // the cargo event's id
+  eventId?: Types.ObjectId; // the cargo event's id
   recipientUserId: Types.ObjectId;
   channel: "PUSH" | "IN_APP";
   // PENDING: waiting for delivery (or for the next retry). SENT: delivered.
@@ -21,7 +21,7 @@ export interface INotificationDocument extends Document {
 const notificationSchema = new Schema<INotificationDocument>(
   {
     companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true, index: true },
-    eventId: { type: String, index: true },
+    eventId: { type: Schema.Types.ObjectId, ref: "CargoEvent", index: true },
     recipientUserId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     channel: { type: String, enum: ["PUSH", "IN_APP"], default: "IN_APP", required: true },
     status: { type: String, enum: ["PENDING", "SENT", "FAILED"], default: "PENDING", required: true },

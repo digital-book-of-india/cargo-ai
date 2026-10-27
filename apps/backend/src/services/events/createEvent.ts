@@ -9,7 +9,8 @@ import {
   EventHistoryModel,
   NotificationModel,
   SiteModel,
-  ZoneModel,
+  LoadingSessionModel,
+  VisionZoneModel,
 } from "../../models";
 import type { ICargoEventDocument, IEvidenceItem } from "../../models";
 import { can, canAccessSite } from "../authz/permissions";
@@ -67,7 +68,7 @@ function contentTypeForKey(key: string): string | undefined {
   return undefined;
 }
 
-async function buildEvidence(companyId: string, evidence: CargoEventInput["evidence"]): Promise<IEvidenceItem[]> {
+async function buildEvidence(companyId: string, siteId: string, evidence: CargoEventInput["evidence"]): Promise<IEvidenceItem[]> {
   const items: IEvidenceItem[] = [];
   const entries: Array<["snapshot" | "clip", string | null | undefined]> = [
     ["snapshot", evidence?.snapshotObjectKey],
@@ -75,8 +76,8 @@ async function buildEvidence(companyId: string, evidence: CargoEventInput["evide
   ];
   for (const [type, key] of entries) {
     if (!key) continue;
-    // Only files the server itself stored for this company may be referenced.
-    if (!keyBelongsToCompany(companyId, key)) {
+    // Only files the server itself stored for this company and site may be referenced.
+    if (!keyBelongsToCompany(companyId, key, siteId)) {
       throw new AppError(400, "VALIDATION_ERROR", "Evidence must be uploaded through the evidence endpoint first.");
     }
     if (!(await getEvidenceStorage().exists(key))) {
@@ -109,7 +110,7 @@ export async function notifyReviewers(event: ICargoEventDocument): Promise<numbe
   const created = await NotificationModel.insertMany(
     recipients.map((m) => ({
       companyId: event.companyId,
-      eventId: event._id.toString(),
+      eventId: event._id,
       recipientUserId: m.userId,
       channel: "IN_APP",
       status: "PENDING",
@@ -158,10 +159,19 @@ export async function createCargoEvent(input: CargoEventInput): Promise<CreateCa
   let zoneId: Types.ObjectId | null = null;
   if (input.zoneId) {
     const zone = Types.ObjectId.isValid(input.zoneId)
-      ? await ZoneModel.findOne({ _id: input.zoneId, siteId: site._id, companyId: site.companyId }).select("_id")
+      ? await VisionZoneModel.findOne({ _id: input.zoneId, siteId: site._id }).select("_id")
       : null;
     if (!zone) throw new AppError(400, "VALIDATION_ERROR", "zoneId does not belong to the target site.");
     zoneId = zone._id as Types.ObjectId;
+  }
+
+  let loadingSessionId: Types.ObjectId | null = null;
+  if (input.loadingSessionId) {
+    const session = Types.ObjectId.isValid(input.loadingSessionId)
+      ? await LoadingSessionModel.findOne({ _id: input.loadingSessionId, siteId: site._id, companyId: site.companyId }).select("_id")
+      : null;
+    if (!session) throw new AppError(400, "VALIDATION_ERROR", "loadingSessionId does not belong to the target site.");
+    loadingSessionId = session._id as Types.ObjectId;
   }
 
   const payload = input.payload ?? {};
@@ -174,7 +184,7 @@ export async function createCargoEvent(input: CargoEventInput): Promise<CreateCa
   const existing = await CargoEventModel.findOne({ companyId: site.companyId, eventKey: input.eventKey });
   if (existing) return { event: existing, created: false };
 
-  const evidence = await buildEvidence(companyId, input.evidence);
+  const evidence = await buildEvidence(companyId, site._id.toString(), input.evidence);
 
   let event: ICargoEventDocument;
   try {
@@ -183,8 +193,7 @@ export async function createCargoEvent(input: CargoEventInput): Promise<CreateCa
       siteId: site._id,
       cameraId: camera._id,
       zoneId,
-      loadingSessionId:
-        input.loadingSessionId && Types.ObjectId.isValid(input.loadingSessionId) ? input.loadingSessionId : null,
+      loadingSessionId,
       eventKey: input.eventKey,
       eventType: input.eventType,
       severity: input.severity ?? defaultSeverity(input.eventType),

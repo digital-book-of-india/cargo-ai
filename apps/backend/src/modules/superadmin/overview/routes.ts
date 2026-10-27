@@ -25,19 +25,18 @@ adminOverviewRouter.get("/", async (req: Request, res: Response) => {
     ]);
 
     // 2. Truthful Platform Camera Online Calculation
-    const allCameras = await CameraModel.find({}, "status lastHealthAt lastFrameAt").lean().catch(() => []);
-    const totalCameras = allCameras.length;
-    let onlineCameras = 0;
-
-    for (const cam of allCameras) {
-      const { effectiveStatus } = computeEffectiveCameraStatus(
-        cam.status,
-        cam.lastHealthAt,
-        cam.lastFrameAt,
-        staleThreshold
-      );
-      if (effectiveStatus === "ONLINE") onlineCameras++;
-    }
+    // Counted by the database, not by loading every camera: a camera is online only if it is not in an error, untested
+    // or offline state AND both its last health report and its last video frame are fresh (the same rule as
+    // computeEffectiveCameraStatus).
+    const freshSince = new Date(Date.now() - staleThreshold * 1000);
+    const [totalCameras, onlineCameras] = await Promise.all([
+      CameraModel.countDocuments({}).catch(() => 0),
+      CameraModel.countDocuments({
+        status: { $nin: ["ERROR", "PENDING_TEST", "OFFLINE"] },
+        lastHealthAt: { $gte: freshSince },
+        lastFrameAt: { $gte: freshSince },
+      }).catch(() => 0),
+    ]);
 
     const cameraOnlineRate = totalCameras > 0 ? Math.round((onlineCameras / totalCameras) * 100) : null;
 

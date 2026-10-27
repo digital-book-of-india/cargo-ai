@@ -37,6 +37,8 @@ export interface LoadingSession {
   siteId: string;
   site: { id: string; name: string };
   zoneId?: string | null;
+  /** the counting line the session counts on (null for a session without one) */
+  zone?: { id: string; name: string } | null;
   manifestId?: string | null;
   manifest?: { id: string; reference: string; expectedPackageCount: number } | null;
   vehicleId?: string | null;

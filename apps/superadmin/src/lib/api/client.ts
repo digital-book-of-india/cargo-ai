@@ -28,6 +28,18 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+// Earlier versions of this panel kept the admin token in localStorage, where any script on the page could read it. The
+// panel no longer writes it, and removes a copy left behind in a browser that used an older version.
+export function clearLegacyAdminToken(): void {
+  try {
+    if (typeof window !== "undefined") window.localStorage.removeItem("dbi_admin_token");
+  } catch {
+    // storage can be blocked; there is nothing to clean up then
+  }
+}
+
+// The session lives in an httpOnly cookie that only the API can read or write. Nothing about the session is kept
+// where a script on the page could reach it (no token in localStorage, no Authorization header from the browser).
 async function request<T>(path: string, opts: RequestOptions = {}) {
   const url = new URL(API_BASE_URL + path);
   if (opts.query) {
@@ -36,16 +48,8 @@ async function request<T>(path: string, opts: RequestOptions = {}) {
     }
   }
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("dbi_admin_token") : null;
   const headers: Record<string, string> = {};
-
-  if (opts.body) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  if (opts.body) headers["Content-Type"] = "application/json";
 
   let res: Response;
   try {
@@ -65,13 +69,10 @@ async function request<T>(path: string, opts: RequestOptions = {}) {
   if (!res.ok) {
     const err = (json as ApiErrorBody | null)?.error;
 
-    if (typeof window !== "undefined") {
-      if (res.status === 401) {
-        localStorage.removeItem("dbi_admin_token");
-        window.location.href = "/login";
-      } else if (res.status === 403 && path.startsWith("/admin")) {
-        window.location.href = "/access-denied";
-      }
+    // The session has ended: sign in again. A 403 is NOT a reason to leave the page: it only means this one action is
+    // not allowed (for example an event that does not exist for the support tool), and the caller shows that.
+    if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.href = "/login";
     }
 
     throw new ApiError(

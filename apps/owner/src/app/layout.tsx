@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { GeistSans } from "geist/font/sans";
+import { Poppins } from "next/font/google";
 import { Toaster } from "@/components/ui/Toaster";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import "./globals.css";
+
+const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], display: "swap", variable: "--font-poppins" });
 
 export const metadata: Metadata = {
   title: "CargoSense AI",
@@ -18,8 +20,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={GeistSans.variable}>
-      <body className="min-h-screen font-sans">
+    <html lang="en" className={poppins.variable}>
+      <body suppressHydrationWarning className="min-h-screen font-sans">
         <AuthProvider>
           <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
         </AuthProvider>

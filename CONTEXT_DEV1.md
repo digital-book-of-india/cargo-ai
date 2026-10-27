@@ -474,6 +474,17 @@ run `npm run migrate` and `npm run seed` against it; owner `next dev -p 3100 -H 
 `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:4100/api/v1` and `NEXT_DIST_DIR=.next-walk`. Afterwards stop those three, drop `cargo_ai_test`,
 delete `.next-walk` and revert any `tsconfig.json` change.
 
+## 14a. Phases 10 and 11 (Dev 1 plan: `docs/DEV1_PLAN.md`)
+
+- Phase 10 (2026-10-27): placeholders in `apps/backend/.env.example`, `scripts/check-secrets.js` (CI step), CI Mongo as a replica set plus lint, fail-closed `NODE_ENV`. The database password is deliberately NOT rotated (owner decision, accepted risk).
+- Phase 11 (2026-10-27): loading sessions and reports use `VisionZone`; a counting line is required for a session when the site has one; one open session per line and direction; migration `20261101-101-sessions-on-vision-zones` (reversible); counting-line picker on the Shipments screen.
+
+- Phase 12 (2026-10-27): index migration `20261101-102`; foreign-id checks (`loadingSessionId`, evidence key site); camera move/delete look after counting lines and monitors (`services/cameras/lifecycle.ts`); retention for delivered notifications (90 days) and audit entries (365 days); small fixes (reopen false positive, 400 on bad cursor, retry a failed CSV import, 48 h backdate limit, mismatch-event repair step, status rollback when history fails). Tests: `phase12.int.test.ts`. Also (owner request): notification event id is an ObjectId (migration 103), camera names unique per site (migration 104), unresolved events keep evidence up to 2x the retention period.
+
+- Phase 13 (2026-10-27): sessions checked against the database on every request, token version, 12 h lifetime, sign-out revokes, per-account lock; camera address policy; AES-GCM camera secrets (migration 105 pending on the real DB); evidence links with own key and holder recheck; audit gaps closed. Tests: `phase13.int.test.ts`.
+- Phase 15 (2026-10-27): superadmin on its own httpOnly cookie `cargosense_admin` (no token in the browser; sign-in with `panel:"admin"`; `/admin/me`), headers and CSP on both panels, evidence pictures from the API origin, stale-answer guards, Poppins font, no-access state on shipments. Tests: `phase15.int.test.ts`. Production note: panel and API must share a registrable domain for the cookie.
+- Phase 14 (2026-10-27): latency histogram, compression, capped totals, overview in the database, CI image-build job, first restore drill (PASS, in the runbook). Tests: `phase14.int.test.ts`.
+
 ## 14. Phase 9: deploy-readiness (started 2026-10-27)
 
 Done:
@@ -531,7 +542,7 @@ Open findings (deferred, see the heading above):
    Hide or disable controls by role (P3).
 3. PARTLY FIXED in P3 (the zone editor and its old zone types stay until Dev 2 replaces them). Old wording remained in the owner panel: "shutter", placeholder "Main Street Site", "A shutter zone was saved ... from this
    browser" (a localStorage marker, not the database), login page copy (P3).
-4. The auth cookie `dbi_token` is set on host `localhost`, so the owner panel and the superadmin panel share it across ports
+4. The auth cookie `cargosense_token` is set on host `localhost`, so the owner panel and the superadmin panel share it across ports
    in development; signing in to one replaces the other's session.
 5. The seeded demo camera was marked ONLINE with a fake stream. Fixed in the seed (now PENDING_TEST, no frames); re-run the
    seed to refresh existing demo data.

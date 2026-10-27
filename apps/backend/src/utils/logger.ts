@@ -12,7 +12,7 @@ function threshold(): number {
   return env.nodeEnv === "test" ? Infinity : ORDER.info; // tests stay quiet unless asked
 }
 
-const pretty = (process.env.LOG_FORMAT ?? (env.nodeEnv === "production" ? "json" : "pretty")) === "pretty";
+const pretty = (process.env.LOG_FORMAT ?? (env.isProduction ? "json" : "pretty")) === "pretty";
 
 function write(level: Level, msg: string, fields: Record<string, unknown>): void {
   if (ORDER[level] < threshold()) return;
@@ -28,7 +28,7 @@ function write(level: Level, msg: string, fields: Record<string, unknown>): void
 // An Error becomes name, message and stack (stack only outside production, to keep logs small).
 export function errorFields(err: unknown): Record<string, unknown> {
   if (err instanceof Error) {
-    return { errName: err.name, errMessage: err.message, ...(env.nodeEnv === "production" ? {} : { stack: err.stack }) };
+    return { errName: err.name, errMessage: err.message, ...(env.isProduction ? {} : { stack: err.stack }) };
   }
   return { errMessage: String(err) };
 }

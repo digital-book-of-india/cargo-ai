@@ -8,6 +8,7 @@ import { Badge, Button, Card, Modal, SelectField, TextField } from "@/components
 import { useAsync } from "@/hooks/useAsync";
 import { friendlyMessage } from "@/lib/api/messages";
 import { manifestsApi, sessionsApi, vehiclesApi } from "@/lib/api/shipments";
+import { visionApi } from "@/lib/api/vision";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { RECONCILIATION_LABEL, RECONCILIATION_TONE, describeDifference, directionLabel } from "@/lib/shipments";
 import { useSite } from "@/lib/site/SiteProvider";
@@ -53,6 +54,7 @@ export function SessionsPanel() {
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {s.site.name} · {directionLabel(s.direction)}
+                    {s.zone ? ` · ${s.zone.name}` : ""}
                     {s.vehicle ? ` · ${s.vehicle.registrationNumber}` : ""}
                   </p>
                   <p className="text-sm text-muted-foreground">
@@ -100,6 +102,7 @@ function StartDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const [manifestId, setManifestId] = useState(NONE);
   const [vehicleId, setVehicleId] = useState(NONE);
   const [direction, setDirection] = useState<"outbound" | "inbound">("outbound");
+  const [lineChoice, setLineChoice] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +111,13 @@ function StartDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
     [siteId]
   );
   const vehicles = useAsync(() => vehiclesApi.list(), []);
+  // The count of a session is the crossings of one counting line. When the site has an enabled line it must be chosen.
+  const lines = useAsync(
+    () => (siteId ? visionApi.listZones(siteId) : Promise.resolve({ items: [], nextCursor: null })),
+    [siteId]
+  );
+  const activeLines = (lines.data?.items ?? []).filter((z) => z.zoneType === "counting_line" && z.status === "active");
+  const zoneId = activeLines.length === 0 ? null : activeLines.some((z) => z.id === lineChoice) ? lineChoice : activeLines[0].id;
 
   async function submit() {
     setBusy(true);
@@ -115,6 +125,7 @@ function StartDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
     try {
       await sessionsApi.start({
         siteId,
+        zoneId,
         direction,
         manifestId: manifestId === NONE ? null : manifestId,
         vehicleId: vehicleId === NONE ? null : vehicleId,
@@ -139,7 +150,7 @@ function StartDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={busy || !siteId}>
+          <Button onClick={submit} disabled={busy || !siteId || lines.loading}>
             {busy ? "Starting..." : "Start session"}
           </Button>
         </>
@@ -153,9 +164,27 @@ function StartDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
           onValueChange={(v) => {
             setSiteId(v);
             setManifestId(NONE);
+            setLineChoice("");
           }}
           options={sites.filter((s) => s.status === "ACTIVE").map((s) => ({ value: s.id, label: s.name }))}
         />
+        {lines.error ? (
+          <Alert tone="danger">Could not load the counting lines of this site. Close this window and try again.</Alert>
+        ) : activeLines.length > 0 ? (
+          <SelectField
+            label="Counting line"
+            value={zoneId ?? ""}
+            onValueChange={setLineChoice}
+            hint="The session counts only packages crossing this line."
+            options={activeLines.map((z) => ({ value: z.id, label: z.name }))}
+          />
+        ) : (
+          !lines.loading && (
+            <Alert tone="info">
+              This site has no enabled counting line, so the count cannot be taken from a camera. Draw and enable a line on the zone page of a camera first.
+            </Alert>
+          )
+        )}
         <SelectField
           label="Direction"
           value={direction}

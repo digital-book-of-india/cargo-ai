@@ -2,25 +2,29 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api/client";
 
 export default function AccessDeniedPage() {
   const router = useRouter();
 
   const handleLogout = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1";
-      await fetch(`${base}/auth/logout`, { method: "POST", credentials: "include" });
-    } catch {}
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("dbi_admin_token");
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ panel: "admin" }),
+        credentials: "include",
+      });
+    } catch {
+      // the cookie also expires on its own; go to the sign-in page either way
     }
     router.replace("/login");
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
+    <main className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white border border-[#DBEAFE] rounded-xl shadow-sm p-8 text-center space-y-5">
-        <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+        <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto" aria-hidden="true">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
@@ -32,9 +36,9 @@ export default function AccessDeniedPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-bold text-[#0F172A]">Access Denied</h2>
-          <p className="text-sm text-gray-500 mt-2">
-            You do not have the required SUPER_ADMIN privileges to access this administrative portal.
+          <h1 className="text-xl font-bold text-[#0F172A]">Access denied</h1>
+          <p className="text-sm text-gray-600 mt-2">
+            This account is not a platform administrator, so it cannot use this portal.
           </p>
         </div>
 
@@ -43,10 +47,10 @@ export default function AccessDeniedPage() {
             onClick={handleLogout}
             className="px-4 py-2 bg-[#2563EB] text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
           >
-            Logout & Switch Account
+            Sign out and switch account
           </button>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

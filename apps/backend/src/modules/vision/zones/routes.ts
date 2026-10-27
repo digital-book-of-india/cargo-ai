@@ -2,6 +2,7 @@ import { Router } from "express";
 import { saveVisionZoneSchema, updateVisionZoneSchema } from "@dbi/validation";
 import { authenticate, requirePermission, resolveTenant } from "../../../middleware/auth";
 import { AppError } from "../../../middleware/errorHandler";
+import { auditFromRequest } from "../../../services/audit/logger";
 import { asyncHandler, parseLimit, parseOrThrow } from "../shared/http";
 import {
   createZone,
@@ -43,6 +44,9 @@ visionZonesRouter.post(
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(saveVisionZoneSchema, req.body);
     const zone = await createZone(req, input);
+    await auditFromRequest(req, "ZONE_CREATED", "VisionZone", zone.id, {
+      metadata: { siteId: input.siteId, cameraId: input.cameraId, zoneType: input.zoneType },
+    });
     res.status(201).json({ data: { zone } });
   })
 );
@@ -65,6 +69,7 @@ visionZonesRouter.patch(
     const patch = parseOrThrow(updateVisionZoneSchema, req.body);
     const zone = await loadZoneForUser(req, req.params.zoneId);
     const dto = await updateZone(zone, patch);
+    await auditFromRequest(req, "ZONE_UPDATED", "VisionZone", dto.id, { metadata: { fields: Object.keys(patch) } });
     res.json({ data: { zone: dto } });
   })
 );
@@ -77,6 +82,7 @@ visionZonesRouter.post(
   asyncHandler(async (req, res) => {
     const zone = await loadZoneForUser(req, req.params.zoneId);
     const { passed } = await validateZone(zone);
+    await auditFromRequest(req, "ZONE_VALIDATED", "VisionZone", zone._id.toString(), { metadata: { passed } });
     res.json({ data: { zone: toVisionZoneDto(zone), passed } });
   })
 );
@@ -88,6 +94,7 @@ visionZonesRouter.post(
   asyncHandler(async (req, res) => {
     const zone = await loadZoneForUser(req, req.params.zoneId);
     const dto = await enableZone(zone);
+    await auditFromRequest(req, "ZONE_ENABLED", "VisionZone", dto.id);
     res.json({ data: { zone: dto } });
   })
 );

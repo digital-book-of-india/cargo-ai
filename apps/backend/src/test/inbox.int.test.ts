@@ -88,7 +88,7 @@ describe("inbox and notifications (integration)", () => {
       });
       try {
         const eventId = await newEvent();
-        const rows = await coll.find({ eventId }).toArray();
+        const rows = await coll.find({ eventId: new mongoose.Types.ObjectId(eventId) }).toArray();
         assert.equal(rows.length, 3, "owner, manager and operator are notified");
         for (const r of rows) {
           assert.equal(r.status, "PENDING", "the first attempt failed, so it waits for a retry");
@@ -111,7 +111,7 @@ describe("inbox and notifications (integration)", () => {
           if (attempt < MAX_ATTEMPTS) assert.equal(r.retryScheduled, 3, `attempt ${attempt}`);
           else assert.equal(r.deadLettered, 3, "the last failed attempt dead-letters");
         }
-        const dead = await coll.find({ eventId }).toArray();
+        const dead = await coll.find({ eventId: new mongoose.Types.ObjectId(eventId) }).toArray();
         for (const r of dead) {
           assert.equal(r.status, "FAILED");
           assert.equal(r.attempts, MAX_ATTEMPTS);
@@ -126,7 +126,7 @@ describe("inbox and notifications (integration)", () => {
       }
 
       const healthy = await newEvent();
-      const ok = await mongoose.connection.collection("notifications").find({ eventId: healthy }).toArray();
+      const ok = await mongoose.connection.collection("notifications").find({ eventId: new mongoose.Types.ObjectId(healthy) }).toArray();
       assert.ok(ok.length > 0 && ok.every((r) => r.status === "SENT" && r.sentAt), "delivery works again once the channel recovers");
     });
 
@@ -142,7 +142,7 @@ describe("inbox and notifications (integration)", () => {
         fail = false;
         const result = await dispatchDue(new Date(Date.now() + 120_000));
         assert.equal(result.delivered, 3);
-        const rows = await mongoose.connection.collection("notifications").find({ eventId }).toArray();
+        const rows = await mongoose.connection.collection("notifications").find({ eventId: new mongoose.Types.ObjectId(eventId) }).toArray();
         assert.ok(rows.every((r) => r.status === "SENT" && r.attempts === 2));
       } finally {
         setChannelHandler("IN_APP", null);
@@ -163,7 +163,7 @@ describe("inbox and notifications (integration)", () => {
         const later = new Date(Date.now() + 120_000);
         await Promise.all([dispatchDue(later), dispatchDue(later), dispatchDue(later)]);
         const mongoose = (await import("mongoose")).default;
-        const ids = (await mongoose.connection.collection("notifications").find({ eventId }).toArray()).map((r) => String(r._id));
+        const ids = (await mongoose.connection.collection("notifications").find({ eventId: new mongoose.Types.ObjectId(eventId) }).toArray()).map((r) => String(r._id));
         assert.equal(ids.length, 3);
         for (const id of ids) assert.equal(delivered.get(id), 1, "each notification is delivered exactly once");
       } finally {
@@ -179,7 +179,7 @@ describe("inbox and notifications (integration)", () => {
       const again = await notifyReviewers(event!);
       assert.equal(again, 0);
       const mongoose = (await import("mongoose")).default;
-      assert.equal(await mongoose.connection.collection("notifications").countDocuments({ eventId }), 3);
+      assert.equal(await mongoose.connection.collection("notifications").countDocuments({ eventId: new mongoose.Types.ObjectId(eventId) }), 3);
     });
   });
 

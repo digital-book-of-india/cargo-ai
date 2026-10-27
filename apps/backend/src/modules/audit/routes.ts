@@ -49,7 +49,7 @@ auditRouter.get(
 
     const rows = await AuditLogModel.find(query).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean();
     const page = rows.slice(0, limit);
-    const users = await UserModel.find({ _id: { $in: [...new Set(page.map((r) => r.actorUserId.toString()))] } }).select("name email").lean();
+    const users = await UserModel.find({ _id: { $in: [...new Set(page.map((r) => r.actorUserId?.toString()).filter((x): x is string => Boolean(x)))] } }).select("name email").lean();
     const userBy = new Map(users.map((u) => [u._id.toString(), u]));
     const last = page[page.length - 1];
 
@@ -58,7 +58,9 @@ auditRouter.get(
         items: page.map((r) => ({
           id: r._id.toString(),
           action: r.action,
-          actor: { id: r.actorUserId.toString(), name: userBy.get(r.actorUserId.toString())?.name ?? "Unknown user" },
+          actor: r.actorUserId
+            ? { id: r.actorUserId.toString(), name: userBy.get(r.actorUserId.toString())?.name ?? "Unknown user" }
+            : { id: "system", name: "System" },
           targetType: r.targetType,
           targetId: r.targetId,
           reason: r.reason ?? null,

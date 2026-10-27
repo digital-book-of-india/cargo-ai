@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { createSiteSchema, updateSiteSchema } from "@dbi/validation";
-import { CameraModel, SiteModel, ZoneModel } from "../../models";
+import { CameraModel, SiteModel, VisionZoneModel } from "../../models";
 import { asyncHandler, guard, requireSiteAccess } from "../../middleware/auth";
 import { AppError } from "../../middleware/errorHandler";
 import { auditFromRequest } from "../../services/audit/logger";
@@ -154,7 +154,7 @@ sitesRouter.delete(
 
     const [cameras, zones] = await Promise.all([
       CameraModel.countDocuments({ siteId: site._id, companyId: site.companyId }),
-      ZoneModel.countDocuments({ siteId: site._id, companyId: site.companyId, enabled: true }),
+      VisionZoneModel.countDocuments({ siteId: site._id, status: "active" }),
     ]);
     if (cameras > 0 || zones > 0) {
       throw new AppError(

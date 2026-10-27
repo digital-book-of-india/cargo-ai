@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import compression from "compression";
 import helmet from "helmet";
 import { env } from "./config/env";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
@@ -25,6 +26,7 @@ import { aiEventsRouter } from "./modules/internal/ai-events/routes";
 import { vehiclesRouter, manifestsRouter, loadingSessionsRouter } from "./modules/shipments/routes";
 import { evidenceRouter } from "./modules/evidence/routes";
 import { adminOverviewRouter } from "./modules/superadmin/overview/routes";
+import { adminMeRouter } from "./modules/superadmin/me/routes";
 import { adminCompaniesRouter } from "./modules/superadmin/companies/routes";
 import { adminSitesRouter } from "./modules/superadmin/sites/routes";
 import { adminHealthRouter } from "./modules/superadmin/health/routes";
@@ -44,6 +46,7 @@ export const app = express();
 app.set("trust proxy", env.trustProxy);
 app.use(requestId);
 app.use(requestLogger);
+app.use(compression()); // JSON lists shrink a lot; images and video are already compressed and are skipped
 
 // Security headers + a conservative CSP (evidence images/clips are same-origin signed links).
 app.use(
@@ -67,7 +70,7 @@ app.use(
 // 2. Multi-origin CORS configuration (Port 3000 & Port 3001)
 const allowedOrigins = [
   // the local panels are only trusted outside production
-  ...(env.nodeEnv === "production" ? [] : ["http://localhost:3000", "http://localhost:3001"]),
+  ...(env.isProduction ? [] : ["http://localhost:3000", "http://localhost:3001"]),
   ...(Array.isArray(env.corsOrigins)
     ? env.corsOrigins
     : env.corsOrigins
@@ -85,7 +88,7 @@ const corsOptions: cors.CorsOptions = {
       return callback(null, true);
     }
     // In dev, permit local loopback origins (localhost / 127.0.0.1)
-    if (env.nodeEnv !== "production") {
+    if (!env.isProduction) {
       if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
         return callback(null, true);
       }
@@ -149,6 +152,7 @@ v1.use("/loading-sessions", loadingSessionsRouter);
 v1.use("/ai/events", serviceAuth, ingestRateLimiter, aiEventsRouter);
 
 // Dev 2 Super Admin Endpoints
+v1.use("/admin/me", adminMeRouter);
 v1.use("/admin/overview", adminOverviewRouter);
 v1.use("/admin/companies", adminCompaniesRouter);
 v1.use("/admin/sites", adminSitesRouter);

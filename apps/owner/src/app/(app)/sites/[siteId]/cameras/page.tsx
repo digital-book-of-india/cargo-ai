@@ -80,6 +80,10 @@ export default function CamerasPage() {
     }
   }, [data]);
 
+  // the site on screen now: an answer for a site the person has already left must not replace this site's cameras
+  const currentSite = useRef(siteId);
+  currentSite.current = siteId;
+
   // Statuses change on their own (a camera can go offline), so re-read them now and then.
   const refresh = useCallback(
     async (manual = false) => {
@@ -87,7 +91,7 @@ export default function CamerasPage() {
       if (manual) setRefreshing(true);
       try {
         const res = await camerasApi.list(siteId);
-        if (!mounted.current) return;
+        if (!mounted.current || currentSite.current !== siteId) return;
         setCameras(res.cameras);
         setLastChecked(new Date());
         setRefreshFailed(false);

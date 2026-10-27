@@ -133,13 +133,18 @@ export function EventInbox({ siteId }: { siteId?: string }) {
     };
   }, [baseQuery, loadCounts, retryTick]);
 
+  // The filter the screen shows now. An answer for a filter the person has already left must not be merged into the list.
+  const currentQuery = useRef(baseQuery);
+  currentQuery.current = baseQuery;
+
   // new alerts and review changes made elsewhere appear without a click
   const refreshQuietly = useCallback(async () => {
     if (busy.current || document.visibilityState !== "visible") return;
     busy.current = true;
+    const asked = baseQuery;
     try {
       const page = await eventsApi.query({ ...baseQuery, limit: PAGE_SIZE });
-      if (!mounted.current) return;
+      if (!mounted.current || currentQuery.current !== asked) return;
       const res = applyLatest(itemsRef.current, page.items);
       setItems(res.items);
       if (res.newCount > 0) setNewCount((n) => n + res.newCount);
@@ -170,8 +175,10 @@ export function EventInbox({ siteId }: { siteId?: string }) {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     setMoreError(null);
+    const asked = baseQuery;
     try {
       const page = await eventsApi.query({ ...baseQuery, limit: PAGE_SIZE, cursor: nextCursor });
+      if (currentQuery.current !== asked) return;
       setItems((prev) => sortEvents(mergeEvents(prev, page.items)));
       setNextCursor(page.nextCursor ?? null);
     } catch (err) {

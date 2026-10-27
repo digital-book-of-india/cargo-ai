@@ -1,5 +1,5 @@
 import type { LoadingSession } from "@/types";
-import { API_BASE_URL, ApiError, apiRequest, readResponse } from "./client";
+import { apiDownload, apiRequest } from "./client";
 
 export interface ReportQuery {
   from: string;
@@ -61,19 +61,8 @@ export const reportsApi = {
     (await apiRequest<{ items: MismatchItem[] }>("/reports/mismatches", { query: clean({ ...q }) })).items,
 
   // The export is a file, so it is fetched as a blob with the session cookie.
-  exportEvents: async (q: ReportQuery): Promise<{ blob: Blob; fileName: string }> => {
-    const url = new URL(API_BASE_URL + "/reports/events/export");
-    for (const [k, v] of Object.entries(clean({ ...q }))) url.searchParams.set(k, String(v));
-    let res: Response;
-    try {
-      res = await fetch(url.toString(), { credentials: "include" });
-    } catch {
-      throw new ApiError(0, "NETWORK_ERROR", "Cannot reach the server. Please try again.");
-    }
-    if (!res.ok) return readResponse<never>(res); // throws the server's error
-    const match = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "");
-    return { blob: await res.blob(), fileName: match?.[1] ?? "events.csv" };
-  },
+  exportEvents: (q: ReportQuery): Promise<{ blob: Blob; fileName: string }> =>
+    apiDownload("/reports/events/export", clean({ ...q }), "events.csv"),
 };
 
 export const auditApi = {

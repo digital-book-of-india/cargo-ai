@@ -15,5 +15,5 @@ export function toCsv(header: string[], rows: unknown[][]): string {
   const lines = [header.map(csvCell).join(",")];
   for (const row of rows) lines.push(row.map(csvCell).join(","));
   // a byte order mark makes Excel read the file as UTF-8; CRLF is the CSV standard
-  return "﻿" + lines.join("\r\n") + "\r\n";
+  return "\uFEFF" + lines.join("\r\n") + "\r\n";
 }

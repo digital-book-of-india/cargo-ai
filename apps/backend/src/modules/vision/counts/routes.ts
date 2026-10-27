@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, resolveTenant } from "../../../middleware/auth";
+import { authenticate, requirePermission, resolveTenant } from "../../../middleware/auth";
 import { AppError } from "../../../middleware/errorHandler";
 import { asyncHandler, parseLimit } from "../shared/http";
 import { countSummary, listLedger, type DateRange, type SummaryGroupBy } from "./service";
@@ -7,7 +7,7 @@ import { countSummary, listLedger, type DateRange, type SummaryGroupBy } from ".
 // Mounted at /api/v1/counts (spec section 7)
 export const visionCountsRouter = Router();
 
-visionCountsRouter.use(authenticate, resolveTenant);
+visionCountsRouter.use(authenticate, resolveTenant, requirePermission("monitoring:read"));
 
 const MAX_RANGE_MS = 366 * 24 * 3600_000;
 

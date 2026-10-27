@@ -30,12 +30,12 @@ tags:
   - { name: Operations }
 components:
   securitySchemes:
-    cookieAuth: { type: apiKey, in: cookie, name: dbi_token, description: "Set by login. Also accepted as `Authorization: Bearer <token>`." }
+    cookieAuth: { type: apiKey, in: cookie, name: cargosense_token, description: "Set by login. Also accepted as `Authorization: Bearer <token>`." }
     bearerAuth: { type: http, scheme: bearer }
     serviceToken: { type: apiKey, in: header, name: x-service-token, description: "Shared secret of the AI worker and monitoring." }
     signedLink: { type: apiKey, in: query, name: token, description: "Short-lived link issued with an event's detail view." }
   parameters:
-    Cursor: { name: cursor, in: query, schema: { type: string }, description: "`nextCursor` of the previous page." }
+    Cursor: { name: cursor, in: query, schema: { type: string }, description: "`nextCursor` of the previous page. A cursor that is not valid answers 400." }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
     SiteId: { name: siteId, in: path, required: true, schema: { type: string } }
     CameraId: { name: cameraId, in: path, required: true, schema: { type: string } }
@@ -90,7 +90,7 @@ components:
         siteId: { type: string }
         manifestId: { type: string, description: "Must be an active manifest of the same site." }
         vehicleId: { type: string }
-        zoneId: { type: string }
+        zoneId: { type: string, description: "The counting line of this session (required when the site has an enabled counting line)." }
         direction: { type: string, enum: [inbound, outbound] }
         startedAt: { type: string, format: date-time }
 security:
@@ -111,9 +111,9 @@ paths:
   /api/v1/auth/register:
     post: { tags: [Auth], summary: "Create a company and its owner", security: [], responses: { "201": { $ref: "#/components/responses/Ok" }, "400": { $ref: "#/components/responses/BadRequest" }, "409": { $ref: "#/components/responses/Conflict" }, "429": { $ref: "#/components/responses/TooMany" } } }
   /api/v1/auth/login:
-    post: { tags: [Auth], summary: "Sign in (sets the session cookie)", security: [], responses: { "200": { $ref: "#/components/responses/Ok" }, "401": { $ref: "#/components/responses/Unauthorized" }, "429": { $ref: "#/components/responses/TooMany" } } }
+    post: { tags: [Auth], summary: "Sign in (sets the session cookie cargosense_token). With panel: admin it is the platform-admin sign-in: platform administrators only (403 otherwise), the cookie is cargosense_admin, and the answer contains no token", security: [], responses: { "200": { $ref: "#/components/responses/Ok" }, "401": { $ref: "#/components/responses/Unauthorized" }, "429": { $ref: "#/components/responses/TooMany" } } }
   /api/v1/auth/logout:
-    post: { tags: [Auth], summary: "Sign out", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    post: { tags: [Auth], summary: "Sign out: ends every sign-in of the user (the token version is raised). Body panel: admin signs out of the platform-admin panel (cookie cargosense_admin)", responses: { "200": { $ref: "#/components/responses/Ok" } } }
   /api/v1/auth/accept-invitation:
     post: { tags: [Auth], summary: "Join a company with an invitation token (single use)", security: [], responses: { "201": { $ref: "#/components/responses/Ok" }, "400": { $ref: "#/components/responses/BadRequest" }, "429": { $ref: "#/components/responses/TooMany" } } }
   /api/v1/auth/me:
@@ -155,17 +155,17 @@ paths:
   /api/v1/sites/{siteId}/cameras:
     parameters: [{ $ref: "#/components/parameters/SiteId" }]
     get: { tags: [Cameras], summary: "Cameras of a site (with effectiveStatus and isStale)", responses: { "200": { $ref: "#/components/responses/Ok" } } }
-    post: { tags: [Cameras], summary: "Add a camera (cameras:write); the password is encrypted and never returned", responses: { "201": { $ref: "#/components/responses/Ok" } } }
+    post: { tags: [Cameras], summary: "Add a camera (cameras:write); the password is encrypted and never returned. The name must be unique within the site, ignoring capitals (409 otherwise)", responses: { "201": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
   /api/v1/cameras/{cameraId}:
     parameters: [{ $ref: "#/components/parameters/CameraId" }]
-    patch: { tags: [Cameras], summary: "Change a camera", responses: { "200": { $ref: "#/components/responses/Ok" } } }
-    delete: { tags: [Cameras], summary: "Remove a camera", responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    patch: { tags: [Cameras], summary: "Change a camera (a new name must be unique within the site: 409 otherwise)", responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+    delete: { tags: [Cameras], summary: "Remove a camera: its counting lines are archived and monitoring stops. 409 while a loading session counts on it", responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
   /api/v1/cameras/{cameraId}/test:
     post: { tags: [Cameras], summary: "Test reachability (does not prove video is flowing)", parameters: [{ $ref: "#/components/parameters/CameraId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "429": { $ref: "#/components/responses/TooMany" } } }
   /api/v1/cameras/{cameraId}/preview:
     get: { tags: [Cameras], summary: "SVG test card used as the zone editor backdrop. A placeholder, NOT a real frame: never present it as live video (cameras:read)", parameters: [{ $ref: "#/components/parameters/CameraId" }], responses: { "200": { description: image/svg+xml }, "404": { $ref: "#/components/responses/NotFound" } } }
   /api/v1/cameras/{cameraId}/assign-site:
-    post: { tags: [Cameras], summary: "Move a camera to another site of the same company", parameters: [{ $ref: "#/components/parameters/CameraId" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
+    post: { tags: [Cameras], summary: "Move a camera to another site of the same company; its counting lines and monitor move with it. 409 while a loading session counts on it, or if the new site already has a camera with that name", parameters: [{ $ref: "#/components/parameters/CameraId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
   /api/v1/cameras/{cameraId}/zones:
     parameters: [{ $ref: "#/components/parameters/CameraId" }]
     get: { tags: [Cameras], summary: "The camera's zone", responses: { "200": { $ref: "#/components/responses/Ok" } } }
@@ -205,7 +205,7 @@ paths:
   /api/v1/events/{eventId}/assign:
     post: { tags: [Events], summary: "Assign to a reviewer with access to the site (null unassigns)", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
   /api/v1/events/{eventId}/reopen:
-    post: { tags: [Events], summary: "Reopen a resolved event with a reason (events:reopen)", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
+    post: { tags: [Events], summary: "Reopen a resolved or false-positive event with a reason (events:reopen)", parameters: [{ $ref: "#/components/parameters/EventId" }], responses: { "200": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } } }
   /api/v1/evidence/{eventId}/{kind}:
     get:
       tags: [Events]
@@ -259,7 +259,8 @@ paths:
     get: { tags: [Shipments], summary: "Loading sessions", parameters: [{ name: siteId, in: query, schema: { type: string } }, { name: open, in: query, schema: { type: boolean } }, { name: reconciliationStatus, in: query, schema: { type: string } }, { $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
     post:
       tags: [Shipments]
-      summary: Start a loading session (one open session per manifest)
+      summary: Start a loading session (one open session per manifest, and per counting line and direction)
+      description: "zoneId is the counting line (a vision zone of type counting_line, enabled) whose crossings the session counts. It is required when the site has an enabled counting line (422 otherwise); a line of another site is 400; a line that is not enabled or not a counting line is 422. Two open sessions on the same line and direction give 409."
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SessionInput" } } } }
       responses: { "201": { $ref: "#/components/responses/Ok" }, "409": { $ref: "#/components/responses/Conflict" } }
   /api/v1/loading-sessions/{sessionId}:
@@ -291,6 +292,8 @@ paths:
   /api/v1/audit-logs:
     get: { tags: [Audit], summary: "The company's audit trail (audit:read - owners, admins, auditors)", parameters: [{ name: action, in: query, schema: { type: string } }, { name: targetType, in: query, schema: { type: string } }, { name: actorUserId, in: query, schema: { type: string } }, { $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }, { $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }], responses: { "200": { $ref: "#/components/responses/Ok" } } }
 
+  /api/v1/admin/me:
+    get: { tags: [Admin], summary: "The signed-in platform administrator, read from the admin cookie (cargosense_admin) or a Bearer token. 401 not signed in, 403 not an administrator", responses: { "200": { $ref: "#/components/responses/Ok" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } } }
   /api/v1/admin/overview:
     get: { tags: [Admin], summary: "Platform KPIs", responses: { "200": { $ref: "#/components/responses/Ok" } } }
   /api/v1/admin/companies:

@@ -24,7 +24,7 @@ import {
   ManifestModel,
   SiteModel,
   VehicleModel,
-  ZoneModel,
+  VisionZoneModel,
 } from "../../models";
 import type { ILoadingSessionDocument, IManifestDocument, IVehicleDocument } from "../../models";
 import { asyncHandler, guard } from "../../middleware/auth";
@@ -36,9 +36,14 @@ import { createCargoEvent } from "../../services/events/createEvent";
 import { getObservedCount, observedForSession } from "../../services/counts/observed";
 import { reconcile } from "../../services/loading/reconcile";
 import { MAX_IMPORT_BYTES, parseManifestCsv } from "../../services/manifests/csv";
+import { ensureMismatchEvent } from "../../services/loading/mismatchEvent";
 import { getCompanySettings } from "../../services/settings/companySettings";
 import { decodeCursor, encodeCursor, parseLimit } from "../../utils/pagination";
+import { errorFields, logger } from "../../utils/logger";
 import { isDuplicateKeyError } from "../../utils/validation";
+
+// How far back a session may be started (the start decides which crossings are counted).
+const MAX_BACKDATE_MS = 48 * 3600_000;
 
 export const vehiclesRouter = Router();
 export const manifestsRouter = Router();
@@ -228,8 +233,8 @@ manifestsRouter.post(
 // All-or-nothing unless allowPartial is true. The same file is never imported twice.
 manifestsRouter.post(
   "/import",
-  importRateLimiter,
   ...guard("manifests:write"),
+  importRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { fileName, content, allowPartial } = (req.body ?? {}) as Record<string, unknown>;
     if (typeof content !== "string" || !content.trim()) throw new AppError(400, "VALIDATION_ERROR", "The CSV content is required.");
@@ -252,11 +257,13 @@ manifestsRouter.post(
     });
 
     const previous = await ImportJobModel.findOne({ companyId, kind: "manifests", contentHash: hash });
-    if (previous) {
-      // a failed import wrote nothing, so the same file may be fixed and sent again only if changed;
-      // an identical file always returns the stored result.
+    if (previous && previous.status !== "FAILED") {
+      // a file that was imported (fully or partly) is never imported twice: the stored result is returned
       return void res.json({ data: { job: toDto(previous, true) } });
     }
+    // A failed import wrote nothing, so the same file may be sent again once the cause is fixed (for example the
+    // site code now exists). The old failed record is replaced; the audit trail keeps MANIFEST_IMPORT_FAILED.
+    if (previous) await ImportJobModel.deleteOne({ _id: previous._id, companyId, status: "FAILED" });
 
     const parsed = parseManifestCsv(content);
     const errors = [...parsed.errors];
@@ -404,11 +411,14 @@ export async function formatSessions(list: ILoadingSessionDocument[], withLive =
   const ids = (key: "siteId" | "manifestId" | "vehicleId") => [
     ...new Set(list.map((s) => s[key]?.toString()).filter((x): x is string => Boolean(x))),
   ];
-  const [sites, manifests, vehicles] = await Promise.all([
+  const zoneIds = [...new Set(list.map((s) => s.zoneId?.toString()).filter((x): x is string => Boolean(x)))];
+  const [sites, manifests, vehicles, zones] = await Promise.all([
     SiteModel.find({ _id: { $in: ids("siteId") } }).select("name").lean(),
     ManifestModel.find({ _id: { $in: ids("manifestId") } }).select("reference expectedPackageCount").lean(),
     VehicleModel.find({ _id: { $in: ids("vehicleId") } }).select("registrationNumber").lean(),
+    zoneIds.length ? VisionZoneModel.find({ _id: { $in: zoneIds } }).select("name").lean() : Promise.resolve([]),
   ]);
+  const zoneBy = new Map(zones.map((x) => [x._id.toString(), x]));
   const siteBy = new Map(sites.map((x) => [x._id.toString(), x]));
   const manBy = new Map(manifests.map((x) => [x._id.toString(), x]));
   const vehBy = new Map(vehicles.map((x) => [x._id.toString(), x]));
@@ -433,6 +443,7 @@ export async function formatSessions(list: ILoadingSessionDocument[], withLive =
         siteId: s.siteId.toString(),
         site: { id: s.siteId.toString(), name: siteBy.get(s.siteId.toString())?.name ?? "" },
         zoneId: s.zoneId?.toString() ?? null,
+        zone: s.zoneId ? { id: s.zoneId.toString(), name: zoneBy.get(s.zoneId.toString())?.name ?? "Counting line" } : null,
         manifestId: s.manifestId?.toString() ?? null,
         manifest: man ? { id: man._id.toString(), reference: man.reference, expectedPackageCount: man.expectedPackageCount } : null,
         vehicleId: s.vehicleId?.toString() ?? null,
@@ -519,9 +530,19 @@ loadingSessionsRouter.post(
         throw new AppError(422, "BUSINESS_RULE_FAILED", `A ${manifest.status} manifest cannot start a loading session.`);
       }
     }
+    // The count of a session is the crossings of ONE counting line. Without a line the count would be
+    // everything the site's cameras saw, so a line is required whenever the site has one.
     if (d.zoneId) {
-      const zone = await ZoneModel.exists({ _id: d.zoneId, siteId: site._id, companyId });
-      if (!zone) throw new AppError(400, "VALIDATION_ERROR", "The zone does not belong to this site.");
+      const line = await VisionZoneModel.findOne({ _id: d.zoneId, siteId: site._id }).select("zoneType status").lean();
+      if (!line) throw new AppError(400, "VALIDATION_ERROR", "The counting line does not belong to this site.");
+      if (line.zoneType !== "counting_line") {
+        throw new AppError(422, "BUSINESS_RULE_FAILED", "Only a counting line can be used for a loading session.");
+      }
+      if (line.status !== "active") {
+        throw new AppError(422, "BUSINESS_RULE_FAILED", "Enable the counting line before starting a loading session on it.");
+      }
+    } else if (await VisionZoneModel.exists({ siteId: site._id, zoneType: "counting_line", status: "active" })) {
+      throw new AppError(422, "BUSINESS_RULE_FAILED", "Choose the counting line for this loading session.");
     }
     if (d.vehicleId) {
       const vehicle = await VehicleModel.exists({ _id: d.vehicleId, companyId, active: true });
@@ -530,6 +551,10 @@ loadingSessionsRouter.post(
     const startedAt = d.startedAt ? new Date(d.startedAt) : new Date();
     if (startedAt.getTime() > Date.now() + 60_000) {
       throw new AppError(400, "VALIDATION_ERROR", "The start time cannot be in the future.");
+    }
+    // The session window decides which crossings are counted, so it cannot be moved freely into the past.
+    if (startedAt.getTime() < Date.now() - MAX_BACKDATE_MS) {
+      throw new AppError(400, "VALIDATION_ERROR", `The start time cannot be more than ${MAX_BACKDATE_MS / 3600_000} hours in the past.`);
     }
 
     try {
@@ -546,12 +571,25 @@ loadingSessionsRouter.post(
         createdBy: req.user!.id,
       });
       await auditFromRequest(req, "LOADING_SESSION_STARTED", "LoadingSession", s._id.toString(), {
-        metadata: { siteId: site._id.toString(), manifestId: manifest?._id.toString() ?? null, direction: d.direction },
+        metadata: {
+          siteId: site._id.toString(),
+          manifestId: manifest?._id.toString() ?? null,
+          zoneId: d.zoneId ?? null,
+          direction: d.direction,
+          startedAt: startedAt.toISOString(),
+        },
       });
       res.status(201).json({ data: { session: (await formatSessions([s], true))[0] } });
     } catch (err) {
       if (isDuplicateKeyError(err)) {
-        throw new AppError(409, "CONFLICT", "This manifest already has an open loading session.");
+        const pattern = (err as { keyPattern?: Record<string, unknown> }).keyPattern ?? {};
+        throw new AppError(
+          409,
+          "CONFLICT",
+          "zoneId" in pattern
+            ? `This counting line already has an open ${d.direction} loading session. Close it first.`
+            : "This manifest already has an open loading session."
+        );
       }
       throw err;
     }
@@ -628,33 +666,18 @@ loadingSessionsRouter.post(
       await ManifestModel.updateOne({ _id: closed.manifestId, companyId: closed.companyId }, { $set: { status: "closed" } });
     }
 
+    // The session is already closed. If the event cannot be created now, the repair step (run with the notification
+    // job) creates it later: the event key is fixed, so it can never be created twice.
     let mismatchEvent: { id: string; severity: string; summary: string } | null = null;
     if (result.status === "review_required") {
-      const camera = await mismatchCamera(closed);
-      if (camera) {
-        const { event } = await createCargoEvent({
-          eventKey: `count-mismatch:${closed._id.toString()}`,
-          siteId: closed.siteId.toString(),
-          cameraId: camera.toString(),
-          zoneId: closed.zoneId?.toString() ?? null,
-          loadingSessionId: closed._id.toString(),
-          eventType: "count_mismatch",
-          severity: "high",
-          summary: `Count mismatch: expected ${closed.expectedCountSnapshot}, observed ${observed} (${(result.difference ?? 0) > 0 ? "+" : ""}${result.difference}).`,
-          occurredAt: closedAt,
-          payload: {
-            expectedCount: closed.expectedCountSnapshot,
-            observedCount: observed,
-            difference: result.difference,
-            tolerance,
-            coverageGap: Boolean(gap),
-            disclaimer: SESSION_DISCLAIMER,
-          },
-          actorUserId: req.user!.id,
+      try {
+        mismatchEvent = await ensureMismatchEvent(closed, req.user!.id);
+        if (mismatchEvent) closed.mismatchEventId = new Types.ObjectId(mismatchEvent.id);
+      } catch (err) {
+        logger.warn("could not create the count mismatch event; the repair step will retry", {
+          sessionId: closed._id.toString(),
+          ...errorFields(err),
         });
-        closed.mismatchEventId = event._id as Types.ObjectId;
-        await LoadingSessionModel.updateOne({ _id: closed._id }, { $set: { mismatchEventId: event._id } });
-        mismatchEvent = { id: event._id.toString(), severity: event.severity, summary: event.summary };
       }
     }
 
@@ -665,18 +688,12 @@ loadingSessionsRouter.post(
         difference: result.difference,
         status: result.status,
         coverageGap: Boolean(gap),
+        startedAt: closed.startedAt.toISOString(),
+        closedAt: closedAt.toISOString(),
       },
     });
     res.json({ data: { session: (await formatSessions([closed]))[0], mismatchEvent } });
   })
 );
 
-// an event needs a camera: the zone's own, otherwise the first camera at the site
-async function mismatchCamera(s: ILoadingSessionDocument): Promise<Types.ObjectId | null> {
-  if (s.zoneId) {
-    const zone = await ZoneModel.findOne({ _id: s.zoneId, companyId: s.companyId }).select("cameraId").lean();
-    if (zone?.cameraId) return zone.cameraId as Types.ObjectId;
-  }
-  const cam = await CameraModel.findOne({ siteId: s.siteId, companyId: s.companyId }).sort({ createdAt: 1 }).select("_id").lean();
-  return (cam?._id as Types.ObjectId) ?? null;
-}
+

@@ -39,6 +39,6 @@ describe("csv export", () => {
 
   it("writes a header, CRLF rows and a byte order mark", () => {
     const out = toCsv(["a", "b"], [[1, "x,y"]]);
-    assert.equal(out, "﻿a,b\r\n1,\"x,y\"\r\n");
+    assert.equal(out, "\uFEFFa,b\r\n1,\"x,y\"\r\n");
   });
 });

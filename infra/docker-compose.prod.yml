@@ -12,7 +12,7 @@
 # MongoDB must be a replica set: the vision ingestion writes an event and its count in one transaction.
 # These files have not been built in CI yet: check them on the first deploy (docs/runbook.md).
 x-mongo-uri: &mongo-uri
-  MONGODB_URI: mongodb://mongo:27017/dbi_intelligence?replicaSet=rs0
+  MONGODB_URI: mongodb://mongo:27017/cargo_ai?replicaSet=rs0
 
 services:
   mongo:

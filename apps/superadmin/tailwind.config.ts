@@ -4,6 +4,9 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}", "../../packages/ui/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-poppins)", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       colors: {
         primary: { DEFAULT: "#2563EB", dark: "#1D4ED8" },
         pale: "#EFF6FF",

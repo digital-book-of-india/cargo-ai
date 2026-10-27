@@ -3,7 +3,7 @@ import mongoose, { Schema, model, Document, Types } from "mongoose";
 export interface IAuditLogDocument extends Document {
   _id: Types.ObjectId;
   companyId?: Types.ObjectId | null;
-  actorUserId: Types.ObjectId;
+  actorUserId?: Types.ObjectId | null; // empty for actions of the system itself (for example the AI worker)
   action: string;
   targetType: string;
   targetId: string;
@@ -16,7 +16,7 @@ export interface IAuditLogDocument extends Document {
 const auditLogSchema = new Schema<IAuditLogDocument>(
   {
     companyId: { type: Schema.Types.ObjectId, ref: "Company", default: null, index: true },
-    actorUserId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    actorUserId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
     action: { type: String, required: true },
     targetType: { type: String, required: true },
     targetId: { type: String, required: true },
@@ -28,6 +28,9 @@ const auditLogSchema = new Schema<IAuditLogDocument>(
     timestamps: { createdAt: true, updatedAt: false },
   }
 );
+
+// the audit trail is always read for one company, newest first
+auditLogSchema.index({ companyId: 1, createdAt: -1 });
 
 export const AuditLogModel =
   (mongoose.models.AuditLog as mongoose.Model<IAuditLogDocument>) ||

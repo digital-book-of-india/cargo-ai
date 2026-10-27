@@ -44,9 +44,10 @@ describe("event transition map", () => {
     assert.equal(canTransition("acknowledged", "open"), false);
   });
 
-  it("only a resolved event can be reopened", () => {
+  it("only the two end states can be reopened: resolved and false positive", () => {
     assert.equal(canReopen("resolved"), true);
-    for (const s of CARGO_EVENT_STATUSES.filter((x) => x !== "resolved")) assert.equal(canReopen(s), false, s);
+    assert.equal(canReopen("false_positive"), true, "a wrongly dismissed event must be recoverable");
+    for (const s of CARGO_EVENT_STATUSES.filter((x) => x !== "resolved" && x !== "false_positive")) assert.equal(canReopen(s), false, s);
   });
 });
 

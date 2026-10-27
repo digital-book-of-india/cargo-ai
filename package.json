@@ -10,7 +10,11 @@
     "build:owner": "npm run build -w @dbi/owner",
     "build:superadmin": "npm run build -w @dbi/superadmin",
     "test:owner": "npm run test -w @dbi/owner",
-    "test": "npm run test:owner",
+    "test:superadmin": "npm run test -w @dbi/superadmin",
+    "test": "npm run test:owner && npm run test:superadmin && npm run test -w @dbi/backend",
+    "bench:load": "tsx scripts/load-test.ts",
+    "eval:accuracy": "tsx scripts/evaluate-accuracy.ts",
+    "check:secrets": "node scripts/check-secrets.js",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

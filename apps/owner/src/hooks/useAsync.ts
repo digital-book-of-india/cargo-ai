@@ -18,9 +18,17 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): Asy
   const [tick, setTick] = useState(0);
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
+  const previousDeps = useRef(deps);
 
   useEffect(() => {
     let cancelled = false;
+    // When what is being loaded changes (another site, another filter), the old answer must not stay on screen as if it
+    // belonged to the new one. A plain reload (same inputs) keeps the old data visible while the new answer arrives.
+    const changed = deps.length !== previousDeps.current.length || deps.some((d, i) => !Object.is(d, previousDeps.current[i]));
+    if (changed) {
+      previousDeps.current = deps;
+      setData(null);
+    }
     setLoading(true);
     setError(null);
     loaderRef

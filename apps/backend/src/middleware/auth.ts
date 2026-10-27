@@ -15,48 +15,61 @@ export function asyncHandler(
   };
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
-  const authHeader = req.headers.authorization;
-  let token: string | undefined;
+// The company panel and the platform-admin panel each have their own cookie. Cookies belong to a host, not a port,
+// so with one shared name, signing in on one panel replaced the other panel's session. Company routes read
+// ACCESS_COOKIE, /api/v1/admin routes read ADMIN_COOKIE.
+export const ACCESS_COOKIE = "cargosense_token";
+export const ADMIN_COOKIE = "cargosense_admin";
 
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    token = authHeader.substring(7);
-  } else if (req.headers.cookie) {
+// Where the access token comes from: a Bearer header (API clients, tests) or the httpOnly cookie (the panels).
+export function readAccessToken(req: Request, cookieName: string = ACCESS_COOKIE): string | undefined {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) return authHeader.substring(7);
+  if (req.headers.cookie) {
     const cookies = Object.fromEntries(
       req.headers.cookie.split(";").map((c) => {
         const [k, ...v] = c.trim().split("=");
         return [k, v.join("=")];
       })
     );
-    token = cookies["dbi_token"];
+    return cookies[cookieName];
   }
-
-  if (!token) {
-    res.status(401).json({
-      error: {
-        code: "UNAUTHORIZED",
-        message: "Authentication token missing.",
-        requestId: req.requestId,
-      },
-    });
-    return;
-  }
-
-  const payload = verifyAccessToken(token);
-  if (!payload) {
-    res.status(401).json({
-      error: {
-        code: "UNAUTHORIZED",
-        message: "Invalid or expired token.",
-        requestId: req.requestId,
-      },
-    });
-    return;
-  }
-
-  req.user = payload;
-  next();
+  return undefined;
 }
+
+export type SessionResult =
+  | { ok: true; user: { id: string; email: string; role: string; status: string; name: string } }
+  | { ok: false; status: number; code: string; message: string };
+
+// A token is only the start: the account is read from the database on every request. So a suspended user, a user
+// whose role was taken away, and a token that was signed out (its version is old) stop working at once, not in a week.
+export async function verifySession(token: string | undefined): Promise<SessionResult> {
+  if (!token) return { ok: false, status: 401, code: "UNAUTHORIZED", message: "Authentication token missing." };
+  const payload = verifyAccessToken(token);
+  if (!payload) return { ok: false, status: 401, code: "UNAUTHORIZED", message: "Invalid or expired token." };
+
+  const user = Types.ObjectId.isValid(payload.id)
+    ? await UserModel.findById(payload.id).select("email name role status tokenVersion").lean()
+    : null;
+  if (!user) return { ok: false, status: 401, code: "UNAUTHORIZED", message: "Invalid or expired token." };
+  if ((payload.tv ?? 0) !== (user.tokenVersion ?? 0)) {
+    return { ok: false, status: 401, code: "UNAUTHORIZED", message: "This session has ended. Please sign in again." };
+  }
+  if (user.status === "SUSPENDED") {
+    return { ok: false, status: 403, code: "ACCOUNT_SUSPENDED", message: "This account has been suspended. Please contact support." };
+  }
+  return { ok: true, user: { id: user._id.toString(), email: user.email, role: user.role, status: user.status, name: user.name } };
+}
+
+export const authenticate = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const session = await verifySession(readAccessToken(req));
+  if (!session.ok) {
+    res.status(session.status).json({ error: { code: session.code, message: session.message, requestId: req.requestId } });
+    return;
+  }
+  req.user = session.user;
+  next();
+});
 
 export function requirePlatformAdmin(req: Request, _res: Response, next: NextFunction): void {
   if (!req.user) return next(new AppError(401, "UNAUTHORIZED", "Authentication required."));

@@ -52,9 +52,9 @@ describe("operations (integration)", () => {
       assert.equal(res.status, 200);
       assert.match(res.headers.get("content-type") ?? "", /text\/plain/);
       const text = await res.text();
-      assert.match(text, /dbi_db_connected 1/);
-      assert.match(text, /dbi_events_last_15m [1-9]/);
-      assert.match(text, /dbi_http_requests_total\{method="POST",route="\/api\/v1\/sites",status="2xx"\}/);
+      assert.match(text, /cargosense_db_connected 1/);
+      assert.match(text, /cargosense_events_last_15m [1-9]/);
+      assert.match(text, /cargosense_http_requests_total\{method="POST",route="\/api\/v1\/sites",status="2xx"\}/);
     });
 
     it("event lag reflects how late an event reached the database", async () => {

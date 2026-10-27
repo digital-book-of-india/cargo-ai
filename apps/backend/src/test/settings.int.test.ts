@@ -200,15 +200,17 @@ describe("company settings and honest camera status (integration)", () => {
 
       assert.equal((await patch(a, { retentionDays: 30 })).status, 200);
 
-      const fortyDaysAgo = new Date(Date.now() - 40 * 86400_000).toISOString();
+      // open events keep their evidence up to twice the period (60 days for company A), so 70 days is expired for A
+      // and still inside the 90-day default for B
+      const seventyDaysAgo = new Date(Date.now() - 70 * 86400_000).toISOString();
       const keyA = await upload(site.id, cam.id);
       const keyB = await upload(bSite.id, bCam.id);
-      await ingest(site.id, cam.id, "restricted_zone_movement", { occurredAt: fortyDaysAgo, evidence: { snapshotObjectKey: keyA } });
-      await ingest(bSite.id, bCam.id, "restricted_zone_movement", { occurredAt: fortyDaysAgo, evidence: { snapshotObjectKey: keyB } });
+      await ingest(site.id, cam.id, "restricted_zone_movement", { occurredAt: seventyDaysAgo, evidence: { snapshotObjectKey: keyA } });
+      await ingest(bSite.id, bCam.id, "restricted_zone_movement", { occurredAt: seventyDaysAgo, evidence: { snapshotObjectKey: keyB } });
 
       const result = await runEvidenceRetention(new Date(), 90);
       assert.equal(result.eventsPurged, 1);
-      assert.equal(await getEvidenceStorage().exists(keyA), false, "company A keeps evidence for 30 days: 40-day-old evidence is deleted");
+      assert.equal(await getEvidenceStorage().exists(keyA), false, "company A keeps evidence for 30 days (60 while unresolved): 70-day-old evidence is deleted");
       assert.equal(await getEvidenceStorage().exists(keyB), true, "company B uses the 90-day default: it is kept");
     });
   });

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate, requirePermission, resolveTenant } from "../../../middleware/auth";
 import { AppError } from "../../../middleware/errorHandler";
+import { auditFromRequest } from "../../../services/audit/logger";
 import { asyncHandler } from "../shared/http";
 import { getMonitoringStatus, setCameraMonitoring } from "./service";
 
@@ -25,7 +26,9 @@ visionMonitoringRouter.post(
   "/cameras/:cameraId/start",
   requirePermission("monitoring:control"),
   asyncHandler(async (req, res) => {
-    res.json({ data: { camera: await setCameraMonitoring(req, req.params.cameraId, true) } });
+    const camera = await setCameraMonitoring(req, req.params.cameraId, true);
+    await auditFromRequest(req, "MONITORING_STARTED", "Camera", req.params.cameraId);
+    res.json({ data: { camera } });
   })
 );
 
@@ -34,6 +37,8 @@ visionMonitoringRouter.post(
   "/cameras/:cameraId/stop",
   requirePermission("monitoring:control"),
   asyncHandler(async (req, res) => {
-    res.json({ data: { camera: await setCameraMonitoring(req, req.params.cameraId, false) } });
+    const camera = await setCameraMonitoring(req, req.params.cameraId, false);
+    await auditFromRequest(req, "MONITORING_STOPPED", "Camera", req.params.cameraId);
+    res.json({ data: { camera } });
   })
 );

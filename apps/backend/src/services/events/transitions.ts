@@ -19,9 +19,10 @@ export function nextStatuses(from: CargoEventStatus): readonly CargoEventStatus[
   return TRANSITIONS[from] ?? [];
 }
 
-// Reopening is a separate, permissioned action and only applies to a resolved event.
+// Reopening is a separate, permissioned action. It applies to the two end states: a resolved event, and one that
+// was marked a false positive (a wrongly dismissed event must be recoverable).
 export function canReopen(from: CargoEventStatus): boolean {
-  return from === "resolved";
+  return from === "resolved" || from === "false_positive";
 }
 
 // A resolve outcome decides the final status. Neutral names only: none asserts theft or loss.

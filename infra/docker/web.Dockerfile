@@ -5,6 +5,10 @@
 #
 # NEXT_PUBLIC_* values are written into the browser code at build time, so build one image per
 # environment. Never pass secrets as build arguments.
+#
+# Layer order: dependency manifests and `npm ci` first, source and the Next build afterwards, so a code change does not
+# reinstall every package. The image still contains the build tools: a smaller Next "standalone" image is a later step
+# that needs a machine with Docker to verify (see docs/runbook.md, section 7).
 
 FROM node:20-alpine
 ARG APP=owner
@@ -13,9 +17,16 @@ ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
     NEXT_TELEMETRY_DISABLED=1 \
     APP=${APP}
 WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/backend/package.json apps/backend/
+COPY apps/owner/package.json apps/owner/
+COPY apps/superadmin/package.json apps/superadmin/
+COPY packages/api-types/package.json packages/api-types/
+COPY packages/validation/package.json packages/validation/
+COPY packages/ui/package.json packages/ui/
+RUN npm ci --workspace @dbi/${APP} --include-workspace-root
 COPY . .
-RUN npm ci --workspace @dbi/${APP} --include-workspace-root \
- && npm run build -w @dbi/${APP} \
+RUN npm run build -w @dbi/${APP} \
  && chown -R node:node /app
 USER node
 ENV NODE_ENV=production PORT=3000

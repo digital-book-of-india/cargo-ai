@@ -1,5 +1,7 @@
 "use client";
 
+import { workerView } from "@/components/common/workerStatus";
+
 import React, { useEffect, useState } from "react";
 import { getAdminOverview, OverviewData } from "@/lib/api/admin";
 
@@ -18,7 +20,7 @@ export default function OverviewPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-[#0F172A]">Platform Overview</h2>
+        <h1 className="text-2xl font-bold text-[#0F172A]">Platform Overview</h1>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-28 bg-gray-200 rounded-xl" />
@@ -40,7 +42,7 @@ export default function OverviewPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-[#0F172A]">Platform Overview</h2>
+        <h1 className="text-2xl font-bold text-[#0F172A]">Platform Overview</h1>
         <p className="text-sm text-gray-500 mt-1">Real-time system operational metrics and surveillance monitoring.</p>
       </div>
 
@@ -76,27 +78,21 @@ export default function OverviewPage() {
       {/* AI Worker Status Banner */}
       <div className="p-4 bg-white border border-[#DBEAFE] rounded-xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <span
-            className={`w-3.5 h-3.5 rounded-full ${
-              data.aiWorker.status === "ONLINE" ? "bg-green-500 animate-pulse" : "bg-red-500"
-            }`}
-          />
+          <span className={`w-3.5 h-3.5 rounded-full ${workerView(data.aiWorker).dot}`} aria-hidden="true" />
           <div>
             <h4 className="text-sm font-semibold text-[#0F172A]">AI Monitoring Service Worker</h4>
             <p className="text-xs text-gray-500">
               Last Heartbeat:{" "}
-              {data.aiWorker.lastHeartbeatAt ? new Date(data.aiWorker.lastHeartbeatAt).toLocaleTimeString() : "Never"}
+              {data.aiWorker.lastHeartbeatAt
+                ? `${new Date(data.aiWorker.lastHeartbeatAt).toLocaleTimeString()} (${workerView(data.aiWorker).age})`
+                : "Never"}
             </p>
           </div>
         </div>
         <span
-          className={`px-3 py-1 rounded-full text-xs font-bold ${
-            data.aiWorker.status === "ONLINE"
-              ? "bg-green-100 text-green-800"
-              : "bg-red-100 text-red-800"
-          }`}
+          className={`px-3 py-1 rounded-full text-xs font-bold ${workerView(data.aiWorker).badge}`}
         >
-          {data.aiWorker.status}
+          {workerView(data.aiWorker).label}
         </span>
       </div>
 
@@ -104,7 +100,7 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Alerts */}
         <div className="bg-white border border-[#DBEAFE] rounded-xl shadow-sm p-5">
-          <h3 className="text-base font-bold text-[#0F172A] mb-4">Recent Security Alerts</h3>
+          <h3 className="text-base font-bold text-[#0F172A] mb-4">Recent cargo events</h3>
           <div className="divide-y divide-gray-100">
             {data.recentEvents.length === 0 ? (
               <p className="text-sm text-gray-400 py-4">No recent security events found.</p>

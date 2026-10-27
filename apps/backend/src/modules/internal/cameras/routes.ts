@@ -1,6 +1,27 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { CameraModel, ZoneModel } from "../../../models";
+import { logAuditEvent } from "../../../services/audit/logger";
 import { decryptSecret } from "../../../services/secrets/manager";
+
+// Handing out a decrypted camera address is the most sensitive thing the API does for the AI worker, so it leaves a
+// trace in the owning company's audit trail. One entry per camera and hour: the worker asks every few seconds.
+const CREDENTIAL_AUDIT_INTERVAL_MS = 60 * 60_000;
+const lastCredentialAudit = new Map<string, number>();
+async function noteCredentialRead(camera: { _id: { toString(): string }; companyId?: { toString(): string } | null }, requestId?: string): Promise<void> {
+  const id = camera._id.toString();
+  const last = lastCredentialAudit.get(id) ?? 0;
+  if (Date.now() - last < CREDENTIAL_AUDIT_INTERVAL_MS) return;
+  lastCredentialAudit.set(id, Date.now());
+  await logAuditEvent({
+    actorUserId: null,
+    companyId: camera.companyId ? camera.companyId.toString() : null,
+    action: "CAMERA_CREDENTIALS_READ",
+    targetType: "Camera",
+    targetId: id,
+    requestId,
+    metadata: { by: "ai-worker (service token)" },
+  });
+}
 
 export const internalCamerasRouter = Router();
 
@@ -42,6 +63,7 @@ internalCamerasRouter.get(
 
       const zone = await ZoneModel.findOne({ cameraId: camera._id });
       const streamUrl = decryptSecret(camera.secretRef);
+      await noteCredentialRead(camera, req.requestId);
 
       res.json({
         data: {

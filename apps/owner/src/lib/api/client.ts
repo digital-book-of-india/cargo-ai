@@ -46,7 +46,21 @@ async function send<T>(
     }
   }
 
-  // One signal for both "the caller gave up" and "the server took too long".
+  const res = await fetchWithTimeout(
+    url.toString(),
+    {
+      method,
+      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: "include", // session cookie
+    },
+    signal
+  );
+  return await readResponse<T>(res);
+}
+
+// One signal for both "the caller gave up" and "the server took too long".
+async function fetchWithTimeout(url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -57,27 +71,48 @@ async function send<T>(
   signal?.addEventListener("abort", onCallerAbort);
 
   try {
-    let res: Response;
-    try {
-      res = await fetch(url.toString(), {
-        method,
-        headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-        credentials: "include", // session cookie
-        signal: controller.signal,
-      });
-    } catch {
-      if (timedOut) {
-        throw new ApiError(0, "TIMEOUT", "The server took too long to answer. Please try again.");
-      }
-      if (signal?.aborted) throw new ApiError(0, "ABORTED", "The request was cancelled.");
-      throw new ApiError(0, "NETWORK_ERROR", "Cannot reach the server. Please try again.");
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch {
+    if (timedOut) {
+      throw new ApiError(0, "TIMEOUT", "The server took too long to answer. Please try again.");
     }
-
-    return await readResponse<T>(res);
+    if (signal?.aborted) throw new ApiError(0, "ABORTED", "The request was cancelled.");
+    throw new ApiError(0, "NETWORK_ERROR", "Cannot reach the server. Please try again.");
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onCallerAbort);
+  }
+}
+
+// A file (for example the CSV export): the same timeout, error handling and session-expiry handling as every other call.
+export async function apiDownload(
+  path: string,
+  query: Record<string, string | number | undefined> = {},
+  defaultName = "download"
+): Promise<{ blob: Blob; fileName: string }> {
+  try {
+    const url = new URL(API_BASE_URL + path);
+    for (const [k, v] of Object.entries(query)) {
+      if (v !== undefined) url.searchParams.set(k, String(v));
+    }
+    const res = await fetchWithTimeout(url.toString(), { credentials: "include" });
+    if (!res.ok) return await readResponse<never>(res); // throws the server's error
+    const match = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "");
+    return { blob: await res.blob(), fileName: match?.[1] ?? defaultName };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) unauthorizedHandler?.();
+    throw err;
+  }
+}
+
+// The API hands out some addresses as a path on its own host ("/api/v1/evidence/...", "/api/v1/cameras/.../preview").
+// A picture or clip must be requested from the API host: the same path on the panel's host is a 404.
+export function apiAssetUrl(pathOrUrl: string): string {
+  if (!pathOrUrl.startsWith("/") || pathOrUrl.startsWith("//")) return pathOrUrl;
+  try {
+    return new URL(API_BASE_URL).origin + pathOrUrl;
+  } catch {
+    return pathOrUrl; // the API is on the same host as the panel
   }
 }
 

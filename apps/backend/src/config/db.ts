@@ -8,7 +8,7 @@ const dnsServers = (process.env.DNS_SERVERS ?? "").split(",").map((s) => s.trim(
 if (dnsServers.length > 0) dns.setServers(dnsServers);
 
 // In production indexes come from migrations (npm run migrate), not from every server start.
-mongoose.set("autoIndex", env.nodeEnv !== "production");
+mongoose.set("autoIndex", !env.isProduction);
 
 export async function connectDatabase(): Promise<void> {
   try {

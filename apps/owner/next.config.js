@@ -1,3 +1,5 @@
+const { securityHeaders } = require("../../packages/ui/security-headers");
+
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -6,13 +8,7 @@ const nextConfig = {
     return [
       {
         source: "/:path*",
-        headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          // evidence and camera addresses must not leak through the Referer header
-          { key: "Referrer-Policy", value: "no-referrer" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-        ],
+        headers: securityHeaders({ frameAncestors: "'self'" }),
       },
     ];
   },

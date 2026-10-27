@@ -4,7 +4,7 @@ info:
   version: 0.2.0
   description: |
     Zones, counts, monitoring and AI ingestion. Owner endpoints use the user session
-    (Bearer token or dbi_token cookie). Internal endpoints require x-service-token.
+    (Bearer token or cargosense_token cookie). Internal endpoints require x-service-token.
     IDs are MongoDB ObjectIds (24 hex chars). The API field "siteId" maps to the Shop record.
 servers:
   - url: http://localhost:4000

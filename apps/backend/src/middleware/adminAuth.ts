@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
-import { env } from "../config/env";
-import { UserModel } from "../models";
+import { ADMIN_COOKIE, readAccessToken, verifySession } from "./auth";
 
 export interface AuthenticatedAdminRequest extends Request {
   requestId?: string;
@@ -56,78 +54,33 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
   adminReq.requestId = reqId;
   res.setHeader("x-request-id", reqId);
 
-  const authHeader = (adminReq.headers.authorization || "").trim();
-  const cookies = (req as any).cookies || {};
-  
-  // Dev 3 ke exact dbi_token cookie ko pehle check kiya gaya hai
-  const cookieToken =
-    cookies.dbi_token || cookies.accessToken || cookies.token || cookies.access_token || cookies.jwt;
-  const rawToken = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : cookieToken;
-
-  // 1. JWT verification check
-  if (rawToken) {
-    const secret = (env as any).jwtAccessSecret || process.env.JWT_ACCESS_SECRET;
-
-    if (!secret) {
-      console.error(`[AdminAuthConfigError] reqId: ${reqId} JWT access secret not configured.`);
-      return res.status(503).json({
-        error: {
-          code: "SERVICE_UNAVAILABLE",
-          message: "Authentication service is not properly configured.",
-          requestId: reqId,
-        },
-      });
-    }
-
-    let decoded: any;
-    try {
-      decoded = jwt.verify(rawToken, secret);
-    } catch {
-      return res.status(401).json({
-        error: {
-          code: "UNAUTHORIZED",
-          message: "Invalid or expired administrative token.",
-          requestId: reqId,
-        },
-      });
-    }
-
-    const userId = decoded.userId || decoded.id || decoded.sub;
-    if (userId) {
-      try {
-        const dbUser: any = await UserModel.findById(userId).select("role status email name").lean();
-        if (dbUser) {
-          adminReq.user = {
-            id: String(dbUser._id),
-            role: dbUser.role,
-            status: dbUser.status,
-            email: dbUser.email,
-            name: dbUser.name,
-          };
-        }
-      } catch (dbErr) {
-        console.error(`[AdminAuthDatabaseError] reqId: ${reqId}`, dbErr);
-        return res.status(503).json({
-          error: {
-            code: "SERVICE_UNAVAILABLE",
-            message: "Authentication service temporarily unavailable.",
-            requestId: reqId,
-          },
-        });
-      }
-    }
+  // One session check for the whole API (see verifySession): Bearer header or the cargosense_token cookie, the account read
+  // from the database, signed-out and suspended sessions refused. The role comes from the database, never from the token.
+  let session;
+  try {
+    session = await verifySession(readAccessToken(req, ADMIN_COOKIE));
+  } catch (dbErr) {
+    console.error(`[AdminAuthDatabaseError] reqId: ${reqId}`, dbErr);
+    return res.status(503).json({
+      error: { code: "SERVICE_UNAVAILABLE", message: "Authentication service temporarily unavailable.", requestId: reqId },
+    });
   }
-
-  // (There is no mock or test-token login: every administrator is a real user in the database.)
+  if (!session.ok) {
+    const suspended = session.code === "ACCOUNT_SUSPENDED";
+    return res.status(session.status).json({
+      error: {
+        code: suspended ? "FORBIDDEN" : "UNAUTHORIZED",
+        message: suspended ? "Account suspended. Please contact platform management." : session.message,
+        requestId: reqId,
+      },
+    });
+  }
+  adminReq.user = session.user;
 
   // 2. Unauthenticated -> 401
   if (!adminReq.user || !adminReq.user.id) {
     return res.status(401).json({
-      error: {
-        code: "UNAUTHORIZED",
-        message: "Authentication session required.",
-        requestId: reqId,
-      },
+      error: { code: "UNAUTHORIZED", message: "Authentication session required.", requestId: reqId },
     });
   }
 

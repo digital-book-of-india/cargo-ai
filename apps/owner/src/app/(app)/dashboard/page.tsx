@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -99,7 +99,7 @@ function DashboardContent({ site }: { site: Site }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <PageHeader
-          title={`${site.name} — Cargo Intelligence`}
+          title={`${site.name} — Cargo overview`}
           description="Operational package tracking, line-crossing counts, count trends, and camera security health."
         />
         <div className="w-44">

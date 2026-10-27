@@ -29,7 +29,7 @@ const loadingSessionSchema = new Schema<ILoadingSessionDocument>(
   {
     companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
     siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true },
-    zoneId: { type: Schema.Types.ObjectId, ref: "Zone", default: null },
+    zoneId: { type: Schema.Types.ObjectId, ref: "VisionZone", default: null },
     manifestId: { type: Schema.Types.ObjectId, ref: "Manifest", default: null },
     vehicleId: { type: Schema.Types.ObjectId, ref: "Vehicle", default: null },
     direction: { type: String, enum: ["inbound", "outbound"], required: true },
@@ -60,6 +60,13 @@ loadingSessionSchema.index({ companyId: 1, startedAt: -1 });
 loadingSessionSchema.index(
   { companyId: 1, manifestId: 1 },
   { unique: true, partialFilterExpression: { closedAt: null, manifestId: { $type: "objectId" } } }
+);
+
+// A counting line can have only one open session per direction. Two open outbound sessions on the same line
+// would each count the other's packages.
+loadingSessionSchema.index(
+  { companyId: 1, zoneId: 1, direction: 1 },
+  { unique: true, partialFilterExpression: { closedAt: null, zoneId: { $type: "objectId" } } }
 );
 
 export const LoadingSessionModel =

@@ -3,16 +3,32 @@
 #
 # The server is bundled with esbuild (the shared packages are TypeScript source and are bundled in);
 # only third-party dependencies are installed in the final image.
+#
+# Layer order matters for build time: the dependency manifests are copied and installed FIRST, the source
+# afterwards, so a code change does not reinstall every package. (.dockerignore keeps node_modules out of COPY . .)
 
 FROM node:20-alpine AS build
 WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/backend/package.json apps/backend/
+COPY apps/owner/package.json apps/owner/
+COPY apps/superadmin/package.json apps/superadmin/
+COPY packages/api-types/package.json packages/api-types/
+COPY packages/validation/package.json packages/validation/
+COPY packages/ui/package.json packages/ui/
+RUN npm ci --workspace @dbi/backend --include-workspace-root
 COPY . .
-RUN npm ci --workspace @dbi/backend --include-workspace-root \
- && npm run build -w @dbi/backend
+RUN npm run build -w @dbi/backend
 
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY . .
+COPY package.json package-lock.json ./
+COPY apps/backend/package.json apps/backend/
+COPY apps/owner/package.json apps/owner/
+COPY apps/superadmin/package.json apps/superadmin/
+COPY packages/api-types/package.json packages/api-types/
+COPY packages/validation/package.json packages/validation/
+COPY packages/ui/package.json packages/ui/
 RUN npm ci --workspace @dbi/backend --include-workspace-root --omit=dev
 
 FROM node:20-alpine

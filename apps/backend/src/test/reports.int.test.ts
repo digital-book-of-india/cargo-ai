@@ -191,7 +191,7 @@ describe("reports and audit (integration)", () => {
       assert.match(res.headers.get("content-type") ?? "", /text\/csv/);
       assert.match(res.headers.get("content-disposition") ?? "", /attachment; filename="events-2026-03-09-to-2026-03-12.csv"/);
       const text = await res.text();
-      const lines = text.replace("﻿", "").trim().split("\r\n");
+      const lines = text.replace("\uFEFF", "").trim().split("\r\n");
       assert.match(lines[0], /^Event ID,Occurred at \(UTC\),Occurred at \(site local time\)/);
       assert.equal(lines.length, 1 + 4, "3 Tokyo events plus the new one");
       assert.ok(text.includes("2026-03-10 14:00"), "Tokyo local time of the 05:00Z event");

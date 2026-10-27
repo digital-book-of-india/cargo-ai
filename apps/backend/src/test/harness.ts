@@ -13,7 +13,15 @@ function testDatabaseUri(): string {
   const base = process.env.MONGODB_URI_TEST || process.env.MONGODB_URI;
   if (!base) throw new Error("MONGODB_URI (or MONGODB_URI_TEST) is not set; cannot run integration tests.");
   const url = new URL(base);
-  if (!process.env.MONGODB_URI_TEST) url.pathname = "/cargo_ai_test";
+  if (!process.env.MONGODB_URI_TEST) {
+    // Without an explicit test server, the host of the developer's own MONGODB_URI would be used silently. Only a local
+    // server is taken that way; a remote one needs MONGODB_URI_TEST, or TEST_DB_FROM_DEV_ENV=1 as a deliberate choice.
+    const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    if (!local && process.env.TEST_DB_FROM_DEV_ENV !== "1") {
+      throw new Error("MONGODB_URI points at a remote server. Set MONGODB_URI_TEST (a database name ending in _test), or TEST_DB_FROM_DEV_ENV=1 to run the tests on that server in a separate _test database.");
+    }
+    url.pathname = "/cargo_ai_test";
+  }
   const dbName = url.pathname.replace(/^\//, "");
   if (!dbName.endsWith("_test")) {
     throw new Error(`Refusing to run integration tests against database "${dbName}" (must end with _test).`);

@@ -1,8 +1,11 @@
 import { Router, Request, Response, CookieOptions } from "express";
+import { Types } from "mongoose";
 import { registerSchema, loginSchema, updateProfileSchema, acceptInvitationSchema } from "@dbi/validation";
 import { CompanyMemberModel, CompanyModel, InvitationModel, UserModel } from "../../models";
-import { hashPassword, comparePassword, signAccessToken } from "../../utils/auth";
-import { asyncHandler, authenticate } from "../../middleware/auth";
+import { env } from "../../config/env";
+import { isDuplicateKeyError } from "../../utils/validation";
+import { DUMMY_PASSWORD_HASH, hashPassword, comparePassword, signAccessToken, ttlToMs, verifyAccessToken } from "../../utils/auth";
+import { ACCESS_COOKIE, ADMIN_COOKIE, asyncHandler, authenticate, readAccessToken } from "../../middleware/auth";
 import { authRateLimiter } from "../../middleware/rateLimiter";
 import { AppError } from "../../middleware/errorHandler";
 import { logAuditEvent } from "../../services/audit/logger";
@@ -12,14 +15,23 @@ export const authRouter = Router();
 
 const COOKIE_OPTIONS: CookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  secure: env.isProduction,
   sameSite: "lax",
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  maxAge: ttlToMs(env.accessTokenTtl), // the same lifetime as the token inside it
 };
 
-function issueSession(res: Response, user: { _id: any; email: string; role: any }): string {
-  const token = signAccessToken({ id: user._id.toString(), email: user.email, role: user.role });
-  res.cookie("dbi_token", token, COOKIE_OPTIONS);
+// Wrong passwords in a row before the account is locked, and for how long. A lock is per account, because an IP limit
+// alone cannot stop someone who spreads guesses over many addresses.
+const MAX_FAILED_LOGINS = 5;
+const LOCK_MS = 15 * 60_000;
+
+function issueSession(
+  res: Response,
+  user: { _id: any; email: string; role: any; tokenVersion?: number },
+  cookieName: string = ACCESS_COOKIE
+): string {
+  const token = signAccessToken({ id: user._id.toString(), email: user.email, role: user.role, tv: user.tokenVersion ?? 0 });
+  res.cookie(cookieName, token, COOKIE_OPTIONS);
   return token;
 }
 
@@ -41,13 +53,20 @@ authRouter.post(
     if (existing) throw new AppError(409, "CONFLICT", "An account with this email already exists.");
 
     const passwordHash = await hashPassword(password);
-    const user = await UserModel.create({
-      name,
-      email: email.toLowerCase(),
-      passwordHash,
-      role: "USER",
-      status: "ACTIVE",
-    });
+    let user;
+    try {
+      user = await UserModel.create({
+        name,
+        email: email.toLowerCase(),
+        passwordHash,
+        role: "USER",
+        status: "ACTIVE",
+      });
+    } catch (err) {
+      // someone registered the same email between the check above and now
+      if (isDuplicateKeyError(err)) throw new AppError(409, "CONFLICT", "An account with this email already exists.");
+      throw err;
+    }
 
     let company;
     try {
@@ -95,14 +114,45 @@ authRouter.post(
 
     const { email, password } = parsed.data;
     const user = await UserModel.findOne({ email: email.toLowerCase() });
-    if (!user) throw new AppError(401, "UNAUTHORIZED", "Invalid email or password.");
+
+    // A locked account answers before any password is compared, so guessing during the lock learns nothing.
+    if (user?.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      throw new AppError(429, "RATE_LIMITED", "Too many failed sign-in attempts. Try again in a few minutes.");
+    }
+
+    // The password is always compared (against a dummy hash for an unknown email), so the answer takes the same time
+    // whether or not the account exists, and nothing about the account is revealed before the password is right.
+    const isMatch = await comparePassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!user || !isMatch) {
+      if (user) {
+        const failed = (user.failedLogins ?? 0) + 1;
+        await UserModel.updateOne(
+          { _id: user._id },
+          failed >= MAX_FAILED_LOGINS
+            ? { $set: { failedLogins: 0, lockedUntil: new Date(Date.now() + LOCK_MS) } }
+            : { $set: { failedLogins: failed } }
+        );
+      }
+      throw new AppError(401, "UNAUTHORIZED", "Invalid email or password.");
+    }
 
     if (user.status === "SUSPENDED") {
       throw new AppError(403, "ACCOUNT_SUSPENDED", "This account has been suspended. Please contact support.");
     }
+    if ((user.failedLogins ?? 0) > 0 || user.lockedUntil) {
+      await UserModel.updateOne({ _id: user._id }, { $set: { failedLogins: 0, lockedUntil: null } });
+    }
 
-    const isMatch = await comparePassword(password, user.passwordHash);
-    if (!isMatch) throw new AppError(401, "UNAUTHORIZED", "Invalid email or password.");
+    // The platform-admin panel signs in with panel: "admin": platform administrators only, a cookie of its own, and no
+    // token in the answer (the panel keeps nothing in the browser that a script could read).
+    if (parsed.data.panel === "admin") {
+      if (user.role !== "PLATFORM_ADMIN") {
+        throw new AppError(403, "FORBIDDEN", "This account is not a platform administrator.");
+      }
+      issueSession(res, user, ADMIN_COOKIE);
+      res.json({ data: { user: formatUser(user), memberships: [] } });
+      return;
+    }
 
     const token = issueSession(res, user);
     res.json({
@@ -112,10 +162,20 @@ authRouter.post(
 );
 
 // POST /api/v1/auth/logout
-authRouter.post("/logout", (_req: Request, res: Response) => {
-  res.clearCookie("dbi_token");
-  res.json({ data: { message: "Logged out successfully" } });
-});
+// Signing out ends every sign-in of this user (the token version is raised), not only this browser's cookie: a token that
+// was copied before sign-out stops working too.
+authRouter.post(
+  "/logout",
+  asyncHandler(async (req: Request, res: Response) => {
+    const cookieName = req.body?.panel === "admin" ? ADMIN_COOKIE : ACCESS_COOKIE;
+    const payload = verifyAccessToken(readAccessToken(req, cookieName) ?? "");
+    if (payload && Types.ObjectId.isValid(payload.id)) {
+      await UserModel.updateOne({ _id: payload.id, tokenVersion: payload.tv ?? 0 }, { $inc: { tokenVersion: 1 } });
+    }
+    res.clearCookie(cookieName);
+    res.json({ data: { message: "Logged out successfully" } });
+  })
+);
 
 // POST /api/v1/auth/accept-invitation  (public: the one-time token is the credential)
 authRouter.post(

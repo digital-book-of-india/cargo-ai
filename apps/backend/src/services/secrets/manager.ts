@@ -29,24 +29,46 @@ export function buildRtspUrl(fields: {
   return `${scheme}://${auth}${fields.host}:${port}${path}`;
 }
 
-export function encryptSecret(plainText: string): string {
-  if (!plainText || typeof plainText !== "string") return "";
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(
-    "aes-256-cbc",
-    ENCRYPTION_KEY as unknown as crypto.CipherKey,
-    iv as unknown as crypto.BinaryLike
-  );
-  let encrypted = cipher.update(plainText, "utf8", "hex");
-  encrypted += cipher.final("hex");
-  return `${iv.toString("hex")}:${encrypted}`;
+// New secrets use AES-256-GCM: a changed or truncated value is detected and refused. "v2:<iv>:<tag>:<data>" (hex).
+// Secrets written before that (AES-256-CBC, "<iv>:<data>") can still be read until migration 20261101-105 re-encrypts them.
+const GCM_PREFIX = "v2:";
+const GCM_IV_LENGTH = 12;
+const LEGACY_SECRET = /^[0-9a-f]{32}:[0-9a-f]+$/i;
+
+export function isLegacySecret(value: string): boolean {
+  return typeof value === "string" && LEGACY_SECRET.test(value);
 }
 
+export function encryptSecret(plainText: string): string {
+  if (!plainText || typeof plainText !== "string") return "";
+  const iv = crypto.randomBytes(GCM_IV_LENGTH);
+  const cipher = crypto.createCipheriv(
+    "aes-256-gcm",
+    ENCRYPTION_KEY as unknown as crypto.CipherKey,
+    iv as unknown as crypto.BinaryLike
+  ) as crypto.CipherGCM;
+  const data = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
+  return `${GCM_PREFIX}${iv.toString("hex")}:${cipher.getAuthTag().toString("hex")}:${data.toString("hex")}`;
+}
+
+// Anything that is not a value we encrypted gives "" (never the input itself): a plain-text value in the secret column
+// is not trusted as a stream address.
 export function decryptSecret(cipherText: string): string {
   try {
     if (!cipherText || typeof cipherText !== "string") return "";
+    if (cipherText.startsWith(GCM_PREFIX)) {
+      const [ivHex, tagHex, dataHex] = cipherText.slice(GCM_PREFIX.length).split(":");
+      if (!ivHex || !tagHex || !dataHex) return "";
+      const decipher = crypto.createDecipheriv(
+        "aes-256-gcm",
+        ENCRYPTION_KEY as unknown as crypto.CipherKey,
+        Buffer.from(ivHex, "hex") as unknown as crypto.BinaryLike
+      ) as crypto.DecipherGCM;
+      decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+      return Buffer.concat([decipher.update(Buffer.from(dataHex, "hex")), decipher.final()]).toString("utf8");
+    }
+    if (!isLegacySecret(cipherText)) return "";
     const [ivHex, encrypted] = cipherText.split(":");
-    if (!ivHex || !encrypted) return cipherText;
     const iv = Buffer.from(ivHex, "hex");
     const decipher = crypto.createDecipheriv(
       "aes-256-cbc",

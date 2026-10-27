@@ -23,7 +23,7 @@ notificationsRouter.get(
     const rows = await NotificationModel.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit);
 
     // event details, only for events at sites the person can still reach
-    const eventIds = rows.map((n) => n.eventId).filter((id): id is string => !!id && Types.ObjectId.isValid(id));
+    const eventIds = rows.map((n) => n.eventId).filter((id): id is Types.ObjectId => !!id);
     const events = await CargoEventModel.find({ _id: { $in: eventIds }, companyId: req.tenant!.companyId }).lean();
     const sites = await SiteModel.find({ _id: { $in: events.map((e) => e.siteId) } }).select("name").lean();
     const siteName = new Map(sites.map((s) => [s._id.toString(), s.name]));
@@ -33,11 +33,11 @@ notificationsRouter.get(
     res.json({
       data: {
         items: rows.map((n) => {
-          const e = n.eventId ? eventById.get(n.eventId) : undefined;
+          const e = n.eventId ? eventById.get(n.eventId.toString()) : undefined;
           const visible = e && canAccessSite(req.tenant!.role, req.tenant!.siteIds, e.siteId.toString());
           return {
             id: n._id.toString(),
-            eventId: n.eventId,
+            eventId: n.eventId?.toString(),
             recipientUserId: n.recipientUserId.toString(),
             channel: n.channel,
             status: n.status,

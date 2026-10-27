@@ -1,3 +1,4 @@
+import { env } from "../config/env";
 import { connectDatabase, disconnectDatabase } from "../config/db";
 import {
   CameraModel,
@@ -10,6 +11,7 @@ import {
   NotificationModel,
   SiteModel,
   UserModel,
+  VisionZoneModel,
   ZoneModel,
 } from "../models";
 import { hashPassword } from "../utils/auth";
@@ -31,6 +33,11 @@ const DEMO_USERS = {
 
 async function seed() {
   console.log("Starting CargoSense AI database seed...");
+  // Anything but NODE_ENV=development or test counts as a real deployment (see config/env.ts).
+  if (env.isProduction) {
+    console.error('Refusing to seed: NODE_ENV must be "development" or "test". The seed creates accounts with known passwords.');
+    process.exit(1);
+  }
   await connectDatabase();
 
   // 1. Clear previous DEMO data, including everything that belongs to a demo company.
@@ -42,7 +49,10 @@ async function seed() {
   const demoUserIds = demoUsers.map((u) => u._id);
 
   if (demoCompanyIds.length > 0) {
+    // vision zones carry only a site id, so find the demo sites before they are deleted
+    const demoSiteIds = (await SiteModel.find({ companyId: { $in: demoCompanyIds } }).select("_id")).map((x) => x._id);
     await Promise.all([
+      VisionZoneModel.deleteMany({ siteId: { $in: demoSiteIds } }),
       ZoneModel.deleteMany({ companyId: { $in: demoCompanyIds } }),
       CameraModel.deleteMany({ companyId: { $in: demoCompanyIds } }),
       SiteModel.deleteMany({ companyId: { $in: demoCompanyIds } }),
@@ -182,6 +192,23 @@ async function seed() {
     ],
     sensitivity: "MEDIUM",
     enabled: true,
+  });
+  // A demo counting line, so loading sessions on the demo site have a line to count on. Monitoring is NOT started:
+  // the site still shows "not monitored" until someone starts it and a worker reports.
+  await VisionZoneModel.create({
+    siteId: north._id,
+    cameraId: camera._id,
+    name: "DEMO Loading Bay Line",
+    zoneType: "counting_line",
+    geometry: { coordinateSpace: "normalized_0_1", line: [[0.15, 0.6], [0.9, 0.6]] },
+    rules: {
+      objectClasses: ["package", "box"],
+      minimumConfidence: 0.55,
+      countDirection: "A_TO_B",
+      countOncePerTrackPerRule: true,
+    },
+    status: "active",
+    validationStatus: "valid",
   });
 
   // 6. Demo events. They go through createCargoEvent(), the same path the AI pipeline uses, so

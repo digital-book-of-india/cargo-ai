@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { getAdminHealth, CameraHealthItem, PaginationMeta } from "@/lib/api/admin";
 import { Pagination } from "@/components/common/Pagination";
+import { useLatestRequest } from "@/components/common/useLatestRequest";
+import { workerView } from "@/components/common/workerStatus";
 
 export default function HealthPage() {
   const [cameras, setCameras] = useState<CameraHealthItem[]>([]);
@@ -17,17 +19,24 @@ export default function HealthPage() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
+  const begin = useLatestRequest();
   const fetchHealth = (p = page) => {
+    const isCurrent = begin();
     setLoading(true);
     setError(null);
     getAdminHealth({ page: p, status: statusFilter !== "ALL" ? statusFilter : undefined })
       .then((res: any) => {
+        if (!isCurrent()) return;
         setCameras(res.cameras || []);
         if (res.aiWorker) setAiWorker(res.aiWorker);
         if (res.meta) setMeta(res.meta);
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (isCurrent()) setError(err.message);
+      })
+      .finally(() => {
+        if (isCurrent()) setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -38,7 +47,7 @@ export default function HealthPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-[#0F172A]">Camera & Service Health</h2>
+        <h1 className="text-2xl font-bold text-[#0F172A]">Camera & Service Health</h1>
         <p className="text-sm text-gray-500 mt-1">Truthful camera stream status and AI worker service heartbeats.</p>
       </div>
 
@@ -51,38 +60,25 @@ export default function HealthPage() {
 
       <div className="p-5 bg-white border border-[#DBEAFE] rounded-xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <span
-            className={`w-4 h-4 rounded-full ${
-              aiWorker.status === "ONLINE"
-                ? "bg-green-500 animate-pulse"
-                : aiWorker.status === "UNKNOWN"
-                ? "bg-gray-400"
-                : "bg-red-500"
-            }`}
-          />
+          <span className={`w-4 h-4 rounded-full ${workerView(aiWorker).dot}`} aria-hidden="true" />
           <div>
             <h3 className="font-bold text-gray-900">AI Background Detection Worker</h3>
             <p className="text-xs text-gray-500">
               Last Heartbeat:{" "}
-              {aiWorker.lastHeartbeatAt ? new Date(aiWorker.lastHeartbeatAt).toLocaleString() : "Never"}
+              {aiWorker.lastHeartbeatAt ? `${new Date(aiWorker.lastHeartbeatAt).toLocaleString()} (${workerView(aiWorker).age})` : "Never"}
             </p>
           </div>
         </div>
         <span
-          className={`px-3 py-1 rounded-full text-xs font-bold ${
-            aiWorker.status === "ONLINE"
-              ? "bg-green-100 text-green-800"
-              : aiWorker.status === "UNKNOWN"
-              ? "bg-gray-100 text-gray-700"
-              : "bg-red-100 text-red-800"
-          }`}
+          className={`px-3 py-1 rounded-full text-xs font-bold ${workerView(aiWorker).badge}`}
         >
-          {aiWorker.status}
+          {workerView(aiWorker).label}
         </span>
       </div>
 
       <div className="flex justify-end">
         <select
+          aria-label="Filter cameras by status"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]"

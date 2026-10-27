@@ -57,10 +57,11 @@ async function addMember(owner: Actor, role: string, siteIds: string[]): Promise
   };
 }
 
+let cameraSeq = 0;
 async function addCamera(actor: Actor, siteId: string) {
   const res = await api.post(
     `/api/v1/sites/${siteId}/cameras`,
-    { name: "Bay camera", protocol: "RTSP", host: "192.0.2.10", username: "admin", password: "s3cret-pass" },
+    { name: `Bay camera ${++cameraSeq}`, protocol: "RTSP", host: "192.0.2.10", username: "admin", password: "s3cret-pass" },
     { token: actor.token }
   );
   assert.equal(res.status, 201, res.raw);

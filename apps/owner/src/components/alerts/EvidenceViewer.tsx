@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ImageOff, Info, Video } from "lucide-react";
 import { Alert } from "@/components/common/States";
 import { Button, Card } from "@/components/ui";
+import { apiAssetUrl } from "@/lib/api/client";
 import { isSafeEvidenceUrl, isSystemEvent } from "@/lib/events";
 import type { OwnerEventDetail } from "@/lib/events";
 import { formatInTimezone } from "@/lib/utils/time";
@@ -86,7 +87,7 @@ export function EvidenceViewer({ event, timezone, onReload }: Props) {
                 )}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={snapshotUrl}
+                  src={apiAssetUrl(snapshotUrl)}
                   alt={`Camera picture for this alert, ${formatInTimezone(event.occurredAt, timezone)}`}
                   className="relative mx-auto max-h-[28rem] w-full object-contain"
                   onLoad={() => setImageState("ready")}
@@ -110,7 +111,7 @@ export function EvidenceViewer({ event, timezone, onReload }: Props) {
                   <Video className="size-4" aria-hidden /> Short clip
                 </p>
                 <video
-                  src={clipUrl}
+                  src={apiAssetUrl(clipUrl)}
                   controls
                   preload="none"
                   className="w-full rounded-lg border bg-black"

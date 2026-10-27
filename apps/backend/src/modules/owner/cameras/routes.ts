@@ -3,17 +3,27 @@ import net from "net";
 import { Types } from "mongoose";
 import { assignCameraSiteSchema, cameraRegisterSchema, cameraUpdateSchema, zoneSchema } from "@dbi/validation";
 import { CameraModel, SiteModel, ZoneModel } from "../../../models";
+import { assertCameraFreeOfOpenSessions, followCameraToSite, retireCameraVisionData } from "../../../services/cameras/lifecycle";
+import { assertCameraHostAllowed, resolveAllowedAddress } from "../../../services/cameras/hostPolicy";
 import { asyncHandler, guard, requireCameraAccess, requireSiteAccess } from "../../../middleware/auth";
 import { AppError } from "../../../middleware/errorHandler";
 import { cameraControlRateLimiter } from "../../../middleware/rateLimiter";
 import { auditFromRequest } from "../../../services/audit/logger";
 import { canAccessSite, hasAllSiteAccess } from "../../../services/authz/permissions";
 import { encryptSecret, decryptSecret, sanitizeCamera, buildRtspUrl } from "../../../services/secrets/manager";
+import { isDuplicateKeyError } from "../../../utils/validation";
 
 // Mounted at /api/v1/sites -> /:siteId/cameras
 export const siteCamerasRouter = Router();
 // Mounted at /api/v1/cameras
 export const cameraRouter = Router();
+
+// A camera name is unique within a site: turn the database's duplicate-key error into a clear 409.
+function nameTaken(err: unknown): unknown {
+  return isDuplicateKeyError(err)
+    ? new AppError(409, "CONFLICT", "A camera with this name already exists at this site. Choose a different name.")
+    : err;
+}
 
 function formatZone(zone: any) {
   return {
@@ -43,17 +53,23 @@ siteCamerasRouter.post(
     }
 
     const { name, protocol, host, port, username, password, path } = parsed.data;
+    await assertCameraHostAllowed(host);
     const streamUrl = buildRtspUrl({ protocol, host, port, username, password, path });
 
-    const camera = await CameraModel.create({
-      companyId: site.companyId,
-      siteId: site._id,
-      name,
-      protocol,
-      secretRef: encryptSecret(streamUrl),
-      status: "PENDING_TEST",
-      lastFrameAt: null,
-    });
+    let camera;
+    try {
+      camera = await CameraModel.create({
+        companyId: site.companyId,
+        siteId: site._id,
+        name,
+        protocol,
+        secretRef: encryptSecret(streamUrl),
+        status: "PENDING_TEST",
+        lastFrameAt: null,
+      });
+    } catch (err) {
+      throw nameTaken(err);
+    }
 
     // Never put the address or credentials in audit metadata.
     await auditFromRequest(req, "CAMERA_REGISTERED", "Camera", camera._id.toString(), {
@@ -99,20 +115,23 @@ cameraRouter.get(
 );
 
 // Attempts a real TCP connection to the camera's RTSP host:port.
-// Does not pull video frames (needs the Python/OpenCV worker for that) but proves the
-// stream endpoint is reachable instead of always claiming ONLINE.
+// Does not pull video frames (needs the Python/OpenCV worker for that): it only proves something answers at the
+// address. The address is checked against the host policy and the connection goes to the address that was checked.
 async function probeStreamReachability(streamUrl: string): Promise<{ reachable: boolean; errorCode?: string }> {
   let host: string;
   let port: number;
   try {
     const parsed = new URL(streamUrl);
-    host = parsed.hostname;
+    host = parsed.hostname.replace(/^\[|\]$/g, "");
     port = Number(parsed.port) || (parsed.protocol === "rtsp:" ? 554 : 80);
   } catch {
     return { reachable: false, errorCode: "INVALID_STREAM_URL" };
   }
 
   if (!host) return { reachable: false, errorCode: "INVALID_STREAM_URL" };
+
+  const target = await resolveAllowedAddress(host);
+  if (!target.ok) return { reachable: false, errorCode: target.code === "DNS_FAILED" ? "DNS_FAILED" : "ADDRESS_NOT_ALLOWED" };
 
   return new Promise((resolve) => {
     const socket = new net.Socket();
@@ -131,7 +150,7 @@ async function probeStreamReachability(streamUrl: string): Promise<{ reachable: 
     socket.once("timeout", () => finish({ reachable: false, errorCode: "CONNECTION_TIMEOUT" }));
     socket.once("error", () => finish({ reachable: false, errorCode: "CONNECTION_REFUSED" }));
 
-    socket.connect(port, host);
+    socket.connect(port, target.address);
   });
 }
 
@@ -151,14 +170,18 @@ cameraRouter.post(
     camera.status = reachable ? "ONLINE" : "ERROR";
     camera.lastHealthAt = now;
     camera.lastErrorCode = reachable ? null : errorCode ?? "UNREACHABLE";
-    if (reachable) camera.lastFrameAt = now;
+    // A TCP connection is not a video frame: lastFrameAt is only ever set by the AI worker, so a camera that merely
+    // answers shows as "degraded" (reachable, no video yet), never as online.
     await camera.save();
+    await auditFromRequest(req, "CAMERA_TESTED", "Camera", camera._id.toString(), {
+      metadata: { reachable, errorCode: reachable ? null : errorCode ?? "UNREACHABLE" },
+    });
 
     res.json({
       data: {
         camera: sanitizeCamera(camera),
         message: reachable
-          ? "Stream endpoint reachable. Feed marked online."
+          ? "Something answers at the camera address. No video has been received yet."
           : `Could not reach the camera stream (${camera.lastErrorCode}).`,
       },
     });
@@ -180,6 +203,7 @@ cameraRouter.patch(
     if (name) camera.name = name;
     if (protocol) camera.protocol = protocol;
     if (host) {
+      await assertCameraHostAllowed(host);
       const streamUrl = buildRtspUrl({
         protocol: protocol ?? camera.protocol,
         host,
@@ -191,7 +215,11 @@ cameraRouter.patch(
       camera.secretRef = encryptSecret(streamUrl);
       camera.status = "PENDING_TEST";
     }
-    await camera.save();
+    try {
+      await camera.save();
+    } catch (err) {
+      throw nameTaken(err);
+    }
 
     await auditFromRequest(req, "CAMERA_UPDATED", "Camera", camera._id.toString(), {
       metadata: { renamed: Boolean(name), connectionChanged: Boolean(host) },
@@ -226,9 +254,15 @@ cameraRouter.post(
 
     const fromSiteId = camera.siteId.toString();
     if (fromSiteId !== target._id.toString()) {
+      await assertCameraFreeOfOpenSessions(camera._id, "moved");
       camera.siteId = target._id;
-      await camera.save();
+      try {
+        await camera.save();
+      } catch (err) {
+        throw nameTaken(err);
+      }
       await ZoneModel.updateMany({ cameraId: camera._id, companyId: camera.companyId }, { siteId: target._id });
+      await followCameraToSite(camera._id, target._id);
       await auditFromRequest(req, "CAMERA_SITE_ASSIGNED", "Camera", camera._id.toString(), {
         metadata: { fromSiteId, toSiteId: target._id.toString() },
       });
@@ -288,8 +322,10 @@ cameraRouter.delete(
   ...requireCameraAccess("cameras:write"),
   asyncHandler(async (req: Request, res: Response) => {
     const camera = req.camera!;
+    await assertCameraFreeOfOpenSessions(camera._id, "deleted");
     await CameraModel.deleteOne({ _id: camera._id, companyId: camera.companyId });
     await ZoneModel.deleteMany({ cameraId: camera._id, companyId: camera.companyId });
+    await retireCameraVisionData(camera._id);
     await auditFromRequest(req, "CAMERA_DELETED", "Camera", camera._id.toString(), {
       metadata: { siteId: camera.siteId.toString(), name: camera.name },
     });
@@ -312,7 +348,7 @@ cameraRouter.get(
         <line x1="0" y1="360" x2="1280" y2="360" stroke="#334155" stroke-width="2" stroke-dasharray="8 8"/>
         <line x1="640" y1="0" x2="640" y2="720" stroke="#334155" stroke-width="2" stroke-dasharray="8 8"/>
         <circle cx="640" cy="360" r="100" fill="none" stroke="#38bdf8" stroke-width="2"/>
-        <text x="640" y="340" fill="#f8fafc" font-size="28" font-family="sans-serif" font-weight="600" text-anchor="middle">CAMERA PREVIEW FEED</text>
+        <text x="640" y="340" fill="#f8fafc" font-size="28" font-family="sans-serif" font-weight="600" text-anchor="middle">TEST CARD - NOT LIVE VIDEO</text>
         <text x="640" y="380" fill="#94a3b8" font-size="18" font-family="sans-serif" text-anchor="middle">ID: ${req.camera!._id.toString()}</text>
         <text x="640" y="680" fill="#64748b" font-size="16" font-family="monospace" text-anchor="middle">${timeStr}</text>
       </svg>

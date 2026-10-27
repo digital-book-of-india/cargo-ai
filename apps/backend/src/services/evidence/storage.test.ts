@@ -74,6 +74,10 @@ describe("evidence keys and content checks", () => {
     assert.equal(keyBelongsToCompany("c1", "c1/../c2/x.jpg"), false);
     assert.equal(keyBelongsToCompany("c1", "/c1/x.jpg"), false);
     assert.equal(keyBelongsToCompany("c1", ""), false);
+    // with a site: the key must be inside that site's folder
+    assert.equal(keyBelongsToCompany("c1", "c1/s1/2026/10/x.jpg", "s1"), true);
+    assert.equal(keyBelongsToCompany("c1", "c1/s2/2026/10/x.jpg", "s1"), false, "a file of another site");
+    assert.equal(keyBelongsToCompany("c1", "c1/s10/2026/10/x.jpg", "s1"), false, "a site id that only starts the same");
   });
 
   it("checks that the file content matches the claimed type", () => {

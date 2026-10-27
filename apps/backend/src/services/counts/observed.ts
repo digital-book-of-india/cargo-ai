@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { VisionCameraMonitorModel } from "../../models";
+import { VisionCameraMonitorModel, VisionZoneModel } from "../../models";
 import { getObservedCount as ledgerTotals } from "../../modules/vision/counts/service";
 import type { SessionDirection } from "@dbi/api-types";
 
@@ -32,7 +32,14 @@ const registry = globalThis as unknown as { __dbiObservedProvider?: ObservedCoun
 // available" (null) instead of a misleading zero.
 const ledgerProvider: ObservedCountProvider = async (q) => {
   if (mongoose.connection.readyState !== 1) return null;
-  const monitored = await VisionCameraMonitorModel.exists({ siteId: new mongoose.Types.ObjectId(q.siteId), enabled: true });
+  // For a counting line, what matters is that the line's own camera is monitored. Without a line, any monitored camera at the site.
+  let monitored: unknown;
+  if (q.zoneId) {
+    const line = await VisionZoneModel.findOne({ _id: q.zoneId, siteId: q.siteId }).select("cameraId").lean();
+    monitored = line ? await VisionCameraMonitorModel.exists({ cameraId: line.cameraId, enabled: true }) : null;
+  } else {
+    monitored = await VisionCameraMonitorModel.exists({ siteId: new mongoose.Types.ObjectId(q.siteId), enabled: true });
+  }
   if (!monitored) return null;
   const totals = await ledgerTotals({
     siteId: q.siteId,
