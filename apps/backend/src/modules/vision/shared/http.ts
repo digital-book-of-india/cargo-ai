@@ -20,7 +20,7 @@ export function parseObjectId(value: unknown, field: string): Types.ObjectId {
 }
 
 function firstZodMessage(err: ZodError): string {
-  return err.errors[0]?.message ?? "Invalid request.";
+  return err.issues[0]?.message ?? "Invalid request.";
 }
 
 export function parseOrThrow<T extends ZodTypeAny>(schema: T, body: unknown): T["_output"] {

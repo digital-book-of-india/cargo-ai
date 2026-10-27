@@ -90,7 +90,7 @@ export const visionIngestSchema = z
   .strict()
   .superRefine((v, ctx) => {
     const fail = (message: string, path: (string | number)[]) =>
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path });
+      ctx.addIssue({ code: "custom", message, path });
 
     if (LINE_EVENT_TYPES.has(v.eventType) && !v.zoneId) {
       fail("zoneId is required for zone and line events.", ["zoneId"]);

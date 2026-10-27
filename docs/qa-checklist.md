@@ -19,6 +19,8 @@ Test files are in `apps/backend/src/test`.
 | QA-12 | Notifications reach only people who may review the event; failures retry with backoff and end in FAILED, not lost | Auto | `inbox.int.test.ts` |
 | QA-13 | Backup restores into an empty database with the same data; a damaged backup is refused | Auto + drill | `ops.int.test.ts`; quarterly drill in `docs/runbook.md` |
 | QA-14 | Every route is documented | Auto | `openapi.int.test.ts` |
+| QA-15 | Worker events to reconciliation: zone enabled, monitoring started, crossings counted once per track, session mismatch raises one inbox event, alert-type worker events reach the inbox, counting-only ones do not | Auto | `chain.int.test.ts` |
+| QA-16 | Zone and monitoring changes follow the role table; operators and auditors cannot change them | Auto | `chain.int.test.ts` |
 
 ## Manual walkthrough before each release (about 20 minutes)
 

@@ -35,7 +35,8 @@ from reporting.snapshot import encode_jpeg, upload_snapshot
 from zones.zone_loader import point_in_polygon
 
 BACKEND_URL = (os.getenv("BACKEND_URL") or os.getenv("BACKEND_BASE_URL", "http://localhost:4000")).rstrip("/")
-AI_SERVICE_TOKEN = os.getenv("AI_SERVICE_TOKEN", "dbi-ai-worker-secret-token")
+AI_SERVICE_TOKEN = os.getenv("AI_SERVICE_TOKEN", "")
+MIN_TOKEN_LENGTH = 32  # the API answers 503 to every call when its own token is shorter
 WORKER_ID = os.getenv("WORKER_ID", "cargo-worker-1")
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "15"))
 

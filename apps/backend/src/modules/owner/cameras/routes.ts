@@ -35,7 +35,7 @@ siteCamerasRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = cameraRegisterSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid camera registration");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid camera registration");
     }
     const site = req.site!;
     if (site.status !== "ACTIVE") {
@@ -172,7 +172,7 @@ cameraRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = cameraUpdateSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid update payload");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid update payload");
     }
     const camera = req.camera!;
 
@@ -208,7 +208,7 @@ cameraRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = assignCameraSiteSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid site");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid site");
     }
     const camera = req.camera!;
     const targetId = parsed.data.siteId;
@@ -245,7 +245,7 @@ cameraRouter.put(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = zoneSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid zone definition");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid zone definition");
     }
     const camera = req.camera!;
     const { zoneType, polygon, sensitivity, enabled } = parsed.data;

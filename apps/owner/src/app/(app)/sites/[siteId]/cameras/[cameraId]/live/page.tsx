@@ -89,13 +89,13 @@ export default function LiveMonitoringPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href={`/sites/${siteId}/cameras`}>
             <ArrowLeft className="mr-1 h-4 w-4" /> Cameras
           </Link>
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href={`/sites/${siteId}/cameras/${cameraId}/zone`}>
               <Sliders className="mr-1 h-4 w-4" /> Zone & Rules Editor
@@ -121,7 +121,7 @@ export default function LiveMonitoringPage() {
       </div>
 
       <PageHeader
-        title={`Live Monitoring � ${camera.name}`}
+        title={`Live Monitoring: ${camera.name}`}
         description="Real-time optical stream monitoring, active zone boundaries, and live crossing ledger."
       />
 
@@ -209,7 +209,7 @@ export default function LiveMonitoringPage() {
 
               {/* Watermark / HUD */}
               <text x={30} y={50} fill="#64748b" fontSize={24} fontWeight={600}>
-                {camera.name.toUpperCase()} � {monitor?.frameRate ? `${monitor.frameRate.toFixed(1)} FPS` : "OFFLINE"}
+                {camera.name.toUpperCase()} - {monitor?.frameRate ? `${monitor.frameRate.toFixed(1)} FPS` : "OFFLINE"}
               </text>
             </svg>
 
@@ -269,7 +269,7 @@ export default function LiveMonitoringPage() {
                       </span>
                     </div>
                     <span className="font-mono text-muted-foreground">
-                      {row.confidence ? `${Math.round(row.confidence * 100)}%` : "�"}
+                      {row.confidence ? `${Math.round(row.confidence * 100)}%` : "-"}
                     </span>
                   </div>
                 ))}

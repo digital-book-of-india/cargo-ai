@@ -67,7 +67,7 @@ usersRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = inviteUserSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid invitation");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid invitation");
     }
     const { role, siteIds } = parsed.data;
     const email = parsed.data.email.toLowerCase();
@@ -131,7 +131,7 @@ usersRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = changeMemberRoleSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid role change");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid role change");
     }
     const userId = parseUserId(req.params.userId);
     const member = await CompanyMemberModel.findOne({ companyId: req.tenant!.companyId, userId });
@@ -170,7 +170,7 @@ usersRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = changeMemberStatusSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid status");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid status");
     }
     const userId = parseUserId(req.params.userId);
     const member = await CompanyMemberModel.findOne({ companyId: req.tenant!.companyId, userId });

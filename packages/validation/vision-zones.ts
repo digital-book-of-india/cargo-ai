@@ -52,7 +52,7 @@ export const saveVisionZoneSchema = z
   })
   .superRefine((val, ctx) => {
     for (const message of checkVisionZoneConfig(val)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["geometry"] });
+      ctx.addIssue({ code: "custom", message, path: ["geometry"] });
     }
   });
 
@@ -74,9 +74,9 @@ type Pt = [number, number];
 // by PATCH (on the merged result) and by validate. Returns human-readable issues.
 export function checkVisionZoneConfig(input: { zoneType: string; geometry: unknown; rules: unknown }): string[] {
   const geo = visionGeometrySchema.safeParse(input.geometry);
-  if (!geo.success) return [geo.error.errors[0]?.message ?? "Invalid geometry."];
+  if (!geo.success) return [geo.error.issues[0]?.message ?? "Invalid geometry."];
   const rules = visionZoneRulesSchema.safeParse(input.rules);
-  if (!rules.success) return [rules.error.errors[0]?.message ?? "Invalid rules."];
+  if (!rules.success) return [rules.error.issues[0]?.message ?? "Invalid rules."];
 
   const g = geo.data;
   const r = rules.data;

@@ -19,10 +19,12 @@ The product requirements are in the "AI Cargo & Shipment Security" specification
 | Reports (time-zone and shift aware, coverage gaps), CSV export, audit trail | Done |
 | Super admin: companies, sites, health, audit, suspend/activate, audited support access | Done |
 | Logging, metrics, health probes, backup/restore, CI, Docker files, OpenAPI | Done (Docker files not yet built, see docs/runbook.md) |
-| Zones with counting lines, AI detector/tracker, count ledger, live view, dashboard, pilot | Separate work stream (the AI pipeline); the API has stubs and contracts ready |
+| Zones with counting lines, count ledger, ingestion gateway, monitoring, live view, dashboard | Built and merged (see docs/vision/README.md) |
+| Trained package detector, accuracy on real footage, pilot | Not done: the worker uses motion detection (background subtraction) only |
 
-The AI worker is heartbeat-only for now and reports DEGRADED. Until the counting service exists, loading
-sessions close as "not verified"; no count is ever invented.
+The AI worker (apps/ai-worker) reads RTSP streams, finds moving objects with background subtraction, tracks them and
+reports line crossings. It has not been validated on real footage and is not a trained package detector. When a site has
+no enabled monitoring, loading sessions close as "not verified"; no count is ever invented.
 
 ## Layout (npm workspaces)
 
@@ -31,7 +33,7 @@ sessions close as "not verified"; no count is ever invented.
 | apps/backend | REST API (Express, TypeScript, MongoDB) on :4000 |
 | apps/owner | Owner web panel (Next.js) on :3000 |
 | apps/superadmin | Super admin panel (Next.js) on :3001 |
-| apps/ai-worker | Python worker (heartbeat only for now) |
+| apps/ai-worker | Python worker (motion detection, tracking, line crossings, heartbeat) |
 | packages/api-types | Shared types and the role/permission table |
 | packages/validation | Shared zod schemas |
 | packages/ui | Design tokens |
@@ -75,7 +77,8 @@ never touch the real data. CI (`.github/workflows/ci.yml`) runs all of the above
 |---|---|
 | Deploy, back up, restore, roll back, alerts | [docs/runbook.md](docs/runbook.md) |
 | Every environment variable, go-live checklist | [docs/production-env.md](docs/production-env.md) |
-| API reference | [docs/openapi.yaml](docs/openapi.yaml) (a test keeps it in sync with the routes) |
+| API reference | [docs/openapi.yaml](docs/openapi.yaml) and [docs/vision/openapi.yaml](docs/vision/openapi.yaml) (a test keeps both in sync with the routes) |
+| Vision: zones, ingestion, counts, monitoring | [docs/vision/README.md](docs/vision/README.md) |
 | What is checked and how | [docs/qa-checklist.md](docs/qa-checklist.md) |
 | Security model and review findings | [docs/security-and-privacy.md](docs/security-and-privacy.md) |
 | Project plan, contracts, decisions, open questions | [CONTEXT_DEV1.md](CONTEXT_DEV1.md) |

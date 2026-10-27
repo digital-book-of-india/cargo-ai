@@ -265,8 +265,8 @@ async function detailFor(req: Request, event: ICargoEventDocument): Promise<Carg
   };
 }
 
-function badRequest(parsed: { success: false; error: { errors: Array<{ message: string }> } }, fallback: string): AppError {
-  return new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? fallback);
+function badRequest(parsed: { success: false; error: { issues: Array<{ message: string }> } }, fallback: string): AppError {
+  return new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? fallback);
 }
 
 // GET /api/v1/sites/:siteId/events

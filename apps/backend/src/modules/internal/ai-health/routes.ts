@@ -12,7 +12,7 @@ aiHealthRouter.post("/", async (req: Request, res: Response, next: NextFunction)
       res.status(400).json({
         error: {
           code: "VALIDATION_ERROR",
-          message: parseResult.error.errors[0]?.message ?? "Invalid heartbeat payload",
+          message: parseResult.error.issues[0]?.message ?? "Invalid heartbeat payload",
           requestId: req.requestId,
         },
       });

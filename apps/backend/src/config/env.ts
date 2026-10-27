@@ -52,6 +52,14 @@ export const env = {
   // Evidence (snapshots/clips): private storage, short-lived signed links, retention.
   evidenceStorageDriver: process.env.EVIDENCE_STORAGE_DRIVER ?? "local",
   evidenceStorageDir: process.env.EVIDENCE_STORAGE_DIR ?? "uploads",
+  // Object storage (EVIDENCE_STORAGE_DRIVER=s3): AWS S3, or any S3-compatible service such as Google Cloud
+  // Storage (EVIDENCE_S3_ENDPOINT=https://storage.googleapis.com) or MinIO. Credentials are read by the AWS SDK
+  // from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY or the platform role, never from this file.
+  evidenceS3Bucket: process.env.EVIDENCE_S3_BUCKET ?? "",
+  evidenceS3Region: process.env.EVIDENCE_S3_REGION ?? "us-east-1",
+  evidenceS3Endpoint: process.env.EVIDENCE_S3_ENDPOINT ?? "",
+  evidenceS3ForcePathStyle: process.env.EVIDENCE_S3_FORCE_PATH_STYLE === "true",
+  evidenceS3Prefix: process.env.EVIDENCE_S3_PREFIX ?? "",
   evidenceSignedUrlTtlSeconds: positiveInt("EVIDENCE_SIGNED_URL_TTL_SECONDS", 300),
   evidenceMaxUploadBytes: positiveInt("EVIDENCE_MAX_UPLOAD_BYTES", 8 * 1024 * 1024),
   eventRetentionDays: positiveInt("CARGO_EVENT_RETENTION_DAYS", 90),

@@ -44,8 +44,8 @@ export const vehiclesRouter = Router();
 export const manifestsRouter = Router();
 export const loadingSessionsRouter = Router();
 
-function bad(parsed: { error: { errors: Array<{ message: string }> } }, fallback: string): AppError {
-  return new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? fallback);
+function bad(parsed: { error: { issues: Array<{ message: string }> } }, fallback: string): AppError {
+  return new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? fallback);
 }
 const oid = (v: unknown) => (typeof v === "string" && Types.ObjectId.isValid(v) ? new Types.ObjectId(v) : null);
 

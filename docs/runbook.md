@@ -14,7 +14,7 @@ Commands run from `apps/backend` (or inside the backend container, where `npm ru
    evidence storage). The old version keeps serving until the new one is ready if the platform does
    rolling restarts.
 5. Smoke test: sign in, open Alerts, open Shipments, `GET /internal/v1/metrics` shows `dbi_db_connected 1`.
-6. Scheduled jobs (cron or the platform scheduler):
+6. Scheduled jobs (cron or the platform scheduler; the `scheduler` service in `infra/docker-compose.prod.yml` already runs both):
    - `npm run job:notifications` every minute (delivers and retries notifications)
    - `npm run job:retention` once a day (deletes evidence files past each company's retention)
 
@@ -32,8 +32,9 @@ checksums. It contains personal data and secrets-at-rest (encrypted camera passw
 encrypted, off the server, with the same access rules as the database. It is git-ignored.
 Atlas also offers continuous cloud backups; use them as well when available.
 
-**Evidence files**: copy the folder named by `EVIDENCE_STORAGE_DIR` (or the bucket, once the object
-storage adapter exists), for example `rsync -a /data/evidence/ backup-host:/backups/evidence/`.
+**Evidence files**: with the `local` driver, copy the folder named by `EVIDENCE_STORAGE_DIR`, for example
+`rsync -a /data/evidence/ backup-host:/backups/evidence/`. With the `s3` driver, turn on bucket versioning (or replication to a second
+bucket) and keep the same retention as the database backups; the retention job deletes expired files from the bucket.
 
 Frequency: database at least daily, evidence daily (files are write-once, so incremental copies are cheap).
 Keep at least 7 daily and 4 weekly copies. A backup that was never restored is not a backup: do the
@@ -104,9 +105,12 @@ code can be traced to one log line. Query strings, headers and bodies are never 
 
 ## 7. Not yet verified
 
+- MongoDB must be a replica set (Atlas is; the compose files start a single-node one). Vision ingestion writes an event and its
+  count in one transaction, which a standalone server refuses.
 - The Dockerfiles and `infra/docker-compose.prod.yml` were written but could not be built on the machine
   they were authored on (no Docker). The first deploy should start with `docker compose build` and the
   smoke test above. The bundled server itself was run (`node dist/server.js`, production mode) and works.
-- Evidence is stored on local disk. An S3/GCS adapter behind the same interface is still to be written
-  and needs credentials.
+- The S3-compatible evidence adapter (`EVIDENCE_STORAGE_DRIVER=s3`) is written and covered by a unit test with a fake client,
+  but has not run against a real bucket. On first use: set the variables in `docs/production-env.md`, confirm `/health/ready`
+  is 200, upload one snapshot through the worker and open it from an event.
 - Rate limits are kept in memory per API process: with several API instances use a shared store.

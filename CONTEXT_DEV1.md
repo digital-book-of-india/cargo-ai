@@ -1,20 +1,18 @@
 # Dev 1 Context and Work Log (Platform, Workflow & Admin)
 
 > Single source of truth for Dev 1. **Update this file at the end of every task.**
-> Last updated: 2026-10-26 (P1 to P7 committed and merged with Dev 2's vision work; full test suites not yet re-run after the merge)
+> Last updated: 2026-10-26 (P1 to P7 committed and merged with Dev 2's vision work; suites re-run 2026-10-27, see work log)
 
 ## 0. START HERE (resume from this section)
 
-**Where we are.** All seven phases of the Dev 1 list (P0 to P7) are built and pass their automated checks. P0 is pushed.
-P1 to P7 are **uncommitted** in the working tree on `feature/development` (the owner will commit and push; the suggested
-commit message is "Convert to AI Cargo & Shipment Security (P1-P7)"). Check `git status` first thing: about 200 changed
-files, plus 20 old `git rm`/`git mv` entries that are staged by accident (harmless; they are the deleted shop/owner routes).
+**Where we are.** All seven phases of the Dev 1 list (P0 to P7) are built, committed (`85a05fc`) and merged with Dev 2's vision work.
+Phase 8 (close the spec gaps) is in progress, see section 13. Check `git status` first thing.
 
-**Numbers at the last run (2026-10-26).** Typecheck clean in all apps. Owner tests 12, backend unit tests 61, backend
-integration tests 138, `next build` of owner and superadmin OK, built backend (`node dist/server.js`, production mode) runs.
+**Numbers at the last full run (2026-10-27, before the dependency bump).** Typecheck clean in all apps. Owner tests 12, backend unit
+tests 61, backend integration tests 138 plus the new `chain.int.test.ts` (7), `next build` of owner and superadmin OK, backend bundle OK.
 
 **First 10 minutes tomorrow.**
-1. `git status`, then `git pull origin feature/development --rebase` only after the owner has committed (never before).
+1. `git status`, then `git pull origin feature/development --rebase`.
 2. `npm install` (root), `npm run migrate -w @dbi/backend` (creates indexes; migration 003 is new).
 3. `npm run typecheck && npm test && npm test -w @dbi/backend && npm run test:int -w @dbi/backend` (integration tests need
    MongoDB; they use `cargo_ai_test` and drop it).
@@ -437,7 +435,7 @@ Env files (gitignored): `apps/backend/.env`, `apps/owner/.env.local`, `apps/supe
 - Never run `next build` while `next dev` is running in the same app folder; use
   `NEXT_DIST_DIR=.next-verify npx next build` and revert any `tsconfig.json` change Next makes.
 - Many source files use Windows (CRLF) line endings; scripted edits must handle `\r\n`.
-- `next@14.2.15` has a known vulnerability; upgrade to a patched 14.2.x before deployment.
+- `next` is now 14.2.35 (patched 14.2.x). `npm audit` still lists next 16 / zod 4 fixes, which are major upgrades.
 - The backend rate limiter is in memory; it does not work across multiple instances (needs Redis).
 - Standalone MongoDB has no multi-document transactions; multi-step writes use compensating deletes.
 - Large shell heredocs and `sed`/regex edits corrupted files on this machine more than once: create files with the editor
@@ -445,16 +443,73 @@ Env files (gitignored): `apps/backend/.env`, `apps/owner/.env.local`, `apps/supe
 - After any `next build`/`next dev` with a custom `NEXT_DIST_DIR`, Next adds that folder to `tsconfig.json`; revert it.
 - Tests that need the production-like environment: set `NODE_ENV=production` plus the three secrets and run `node dist/server.js`.
 
+## 13. Phase 8: close the spec gaps (started 2026-10-27)
+
+Phase 8 is not in the original P0-P7 plan; it closes what the Dev 1 requirements list still owed after P7.
+
+Done:
+- [x] Docs refreshed: README, owner README, `docs/vision/*` (shop wording, stale risks, cite tags, ingestion paths), QA checklists (QA-15, QA-16).
+- [x] Pilot report relabelled: the accuracy figures are simulation only. The worker is MOG2 motion detection, not a trained detector.
+- [x] Vision role guard (QA-02): `zones:read/write` and `monitoring:read/control` are now enforced on `/zones` and `/monitoring`
+      (before, any signed-in member could create or enable zones and start or stop monitoring). Test in `chain.int.test.ts`.
+- [x] Worker refuses to start without an `AI_SERVICE_TOKEN` of 32+ characters (it used to default to a short value the API rejects with 503).
+- [x] Superadmin screen `/support` for audited evidence access (reason of 10+ characters, 2-minute link, countdown). Typechecks;
+      not yet seen in a browser.
+
+Open:
+- [x] Browser walkthrough 2026-10-27 (desktop width, owner and platform admin demo accounts): Alerts list and detail, Notifications,
+      Shipments (empty state), Reports, Audit trail (empty state) and the new Support screen all render with their loading, empty and
+      error states and the DEMO / "can be wrong" wording. Not yet checked: 360 px width, keyboard-only use, and the screens with
+      real data (sessions, manifests, clips, a granted support link).
+- [x] S3/GCS evidence adapter written (`services/evidence/objectStorage.ts`, `EVIDENCE_STORAGE_DRIVER=s3`, AWS SDK; works with S3, GCS via the
+      interoperability endpoint with HMAC keys, MinIO). Unit test with a fake client exists; NOT yet run against a real bucket.
+- [ ] Full suites and builds after all phases (owner's decision), then commit.
+
+### How to use the Chrome tool on local pages (learned 2026-10-27)
+
+The Chrome tool refuses to read or click pages on `localhost` ("Can't interact with browser-internal or unparseable URLs"), but works
+on `127.0.0.1`. The owner's dev servers allow CORS only for `localhost:3000/3001`, so for a walkthrough start a throw-away set on
+`127.0.0.1`: backend on 4100 with `PORT=4100`, `MONGODB_URI` pointing at `cargo_ai_test`, `CORS_ORIGINS=http://127.0.0.1:3100,http://127.0.0.1:3101`;
+run `npm run migrate` and `npm run seed` against it; owner `next dev -p 3100 -H 127.0.0.1` and superadmin `-p 3101` with
+`NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:4100/api/v1` and `NEXT_DIST_DIR=.next-walk`. Afterwards stop those three, drop `cargo_ai_test`,
+delete `.next-walk` and revert any `tsconfig.json` change.
+
+## 14. Phase 9: deploy-readiness (started 2026-10-27)
+
+Done:
+- [x] Static review of the never-built Docker files. Fixed in `infra/docker-compose.prod.yml` (and the dev compose):
+      MongoDB now runs as a single-node replica set (vision ingestion uses transactions; a standalone server refuses them, so every
+      worker event would have failed); a `scheduler` service runs the notification job every minute and retention daily (nothing ran them);
+      an `ai-worker` service was added (it was missing). Runbook and production-env docs updated. The YAML parses; the images were
+      still NOT built (no Docker on this machine).
+- [x] 360 px / accessibility audit of 12 owner screens (script check in a 360 px frame: overflow, unnamed buttons, unlabelled inputs, alt text,
+      one h1, tap targets). Clean except the live page (page was 426 px wide) and the zone editor (14 px overflow, 2 unlabelled inputs,
+      toggles not exposed as checkboxes, 20 px targets). Fixed both; broken `�` characters on the live page replaced. The remaining
+      small targets are the skip link (hidden until focused) and the native confidence slider.
+- [x] Dependencies: express 4.22.3, mongoose 8.24.7, zod 4.6.7 (`error.errors` became `error.issues`, `z.ZodIssueCode.custom` became `"custom"`,
+      a global `z.config` keeps the short "Required" message). Typecheck clean; runtime smoke test of the new stack passed in a copy.
+- [x] Next 16.4.3 + React 19.3.1 migration built and verified in a scratch copy (typecheck, both builds, owner tests 12/12, lint 0 errors,
+      browser smoke test of login, dashboard, zone editor, live page). Needs: sonner 2.0.8, eslint 9 + eslint-config-next 16 (`eslint.config.mjs`,
+      the new react-hooks rules set-state-in-effect / purity / refs are warnings), tsconfig `jsx: react-jsx`. APPLIED to this repo
+      on 2026-10-27 (installed with the owner and superadmin dev servers stopped, they lock the Next binary): typecheck clean, both
+      `next build`s pass, owner tests 12/12. `next lint` is gone in Next 16: the owner uses `eslint src`, the superadmin has no lint script.
+
+Open:
+- [ ] Build and run the images (needs Docker).
+- [ ] Redis rate-limit store: only needed with more than one API instance (the compose stack runs one).
+- [ ] Rotate the Atlas password (owner).
+- [ ] Restore drill and automated browser tests (infrastructure).
+
 ## Deferred items: fix after ALL phases are complete
 
 ### Open after P7 (added 2026-10-26)
 
-1. Look at the Alerts, Notifications, Shipments, Reports and Audit trail screens in a real browser at 360 px and desktop width
-   (empty, loading, error and permission-denied states, keyboard use). Nothing was viewed yet.
+1. Alerts, Notifications, Shipments, Reports and Audit trail were viewed at desktop width on 2026-10-27 (see section 13). Still to do: 360 px width,
+   keyboard use, permission-denied states, and the screens with real data.
 2. Build and run the Docker images and the prod compose file; fix whatever breaks.
 3. Superadmin screen for audited support access to evidence.
 4. Restore drill on a real environment; S3/GCS evidence adapter; shared rate-limit store (Redis) for several API instances.
-5. Upgrade `next` to a patched 14.2.x before deployment.
+5. ~~Upgrade `next` to a patched 14.2.x~~ DONE (14.2.35; also express 4.22.3, mongoose 8.24.7). Remaining audit findings need next 16 / zod 4 (major).
 6. Automated browser tests and an accessibility audit (none exist).
 7. Owner README "Screens" table and the old zone editor still show shutter-era wording until Dev 2 replaces the zone editor.
 
@@ -498,3 +553,5 @@ Open findings (deferred, see the heading above):
 | 2026-10-26 | **P5 manifests, vehicles, sessions, reconciliation**: models, observed-count contract, pure reconcile + CSV parser (17 unit tests), API for vehicles/manifests/import/sessions, Shipments screen | unit 52, integration 110, owner 11, both `next build`s, API run on a real server; browser not used |
 | 2026-10-26 | **P6 reports, audit, superadmin**: reports (cargo activity, mismatches, CSV export) in site time zones with shifts and coverage gaps, company audit trail API, audited support access to evidence; owner Reports and Audit trail screens | unit 58, integration 127, owner 12 |
 | 2026-10-26 | **P7 observability, delivery, docs, hardening**: structured logs, metrics, readiness, graceful shutdown, esbuild production bundle (fixed broken `npm start`), backup/restore with tests, CI, Dockerfiles + prod compose (unbuilt), OpenAPI with sync test, README, runbook, production env, QA checklist, security review with 4 fixes | unit 61, integration 138, both builds, built server run |
+
+| 2026-10-27 | **P7 wrap-up**: post-merge run: typecheck, owner 12, backend unit 61, integration 138 pass after fixing 2 stale ingestion tests (now use `/internal/v1/ai/cargo-events`), both `next build`s and backend bundle OK; upgraded next/express/mongoose to patched versions; added `chain.int.test.ts` (zone -> monitoring -> worker events -> session -> reconciliation -> inbox, passes). Not re-run after the dependency bump: full suites and builds | see left |

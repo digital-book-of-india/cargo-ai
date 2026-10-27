@@ -138,3 +138,12 @@ export async function getAdminAuditLogs(query?: {
 }) {
   return apiRequestList<{ auditLogs: AuditLogItem[] }>("/admin/audit-logs", { query: query as any });
 }
+
+export interface SupportEvidenceLink {
+  url: string; // path on the API host
+  expiresAt: string;
+}
+
+export async function requestSupportEvidenceLink(input: { eventId: string; kind: "snapshot" | "clip"; reason: string }) {
+  return apiRequest<SupportEvidenceLink>("/admin/support/evidence-link", { method: "POST", body: input });
+}

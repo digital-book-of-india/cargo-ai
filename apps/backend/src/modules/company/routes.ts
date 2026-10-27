@@ -39,7 +39,7 @@ companyRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = updateCompanySchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid company data");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid company data");
     }
     const { name, timezone } = parsed.data;
     if (timezone !== undefined && !isValidTimezone(timezone)) {
@@ -83,7 +83,7 @@ companyRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = updateCompanySettingsSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid settings");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid settings");
     }
     const changes = parsed.data;
     const keys = Object.keys(changes);

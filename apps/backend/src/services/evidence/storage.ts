@@ -2,9 +2,10 @@ import fs from "fs";
 import path from "path";
 import type { Readable } from "stream";
 import { env } from "../../config/env";
+import { createObjectStorage } from "./objectStorage";
 
-// Private evidence storage behind one small interface. Today there is a local-disk adapter;
-// an S3/GCS adapter plugs in here later without touching any route.
+// Private evidence storage behind one small interface: a local-disk adapter (default) and an
+// S3-compatible object-storage adapter (EVIDENCE_STORAGE_DRIVER=s3). No route knows which one is in use.
 export interface EvidenceStorage {
   put(key: string, data: Buffer): Promise<void>;
   stream(key: string): Promise<{ stream: Readable; size: number } | null>;
@@ -85,10 +86,18 @@ let instance: EvidenceStorage | null = null;
 
 export function getEvidenceStorage(): EvidenceStorage {
   if (instance) return instance;
+  if (env.evidenceStorageDriver === "s3") {
+    instance = createObjectStorage({
+      bucket: env.evidenceS3Bucket,
+      region: env.evidenceS3Region,
+      endpoint: env.evidenceS3Endpoint,
+      forcePathStyle: env.evidenceS3ForcePathStyle,
+      prefix: env.evidenceS3Prefix,
+    });
+    return instance;
+  }
   if (env.evidenceStorageDriver !== "local") {
-    throw new Error(
-      `EVIDENCE_STORAGE_DRIVER="${env.evidenceStorageDriver}" is not available yet. Use "local" until the object-storage adapter is added.`
-    );
+    throw new Error(`EVIDENCE_STORAGE_DRIVER="${env.evidenceStorageDriver}" is not supported. Use "local" or "s3".`);
   }
   instance = new LocalDiskStorage(env.evidenceStorageDir);
   return instance;

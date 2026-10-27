@@ -14,7 +14,7 @@ aiEventsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = aiEventSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid AI event payload");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid AI event payload");
     }
     const body = parsed.data;
 

@@ -35,10 +35,11 @@ All of these are public (shipped to the browser). Never put a secret in a `NEXT_
 |---|---|
 | `/login`, `/register` | Sign in / create account |
 | `/onboarding` | First-run page for a user with no site yet |
-| `/dashboard` | Camera health and latest alerts |
+| `/dashboard` | Camera monitoring health, IN/OUT crossing totals and latest alerts |
 | `/sites/new`, `/sites/:id` | Create and edit a site |
 | `/sites/:id/cameras` | Add/edit a camera, connection test, live status |
-| `/sites/:id/cameras/:cameraId/zone` | Draw the zone (old shutter-style editor; the AI pipeline work replaces it with counting lines) |
+| `/sites/:id/cameras/:cameraId/zone` | Draw counting lines and zones, pick object classes and confidence, validate and enable |
+| `/sites/:id/cameras/:cameraId/live` | Live monitoring view: coverage badge, active zones, latest crossings (the preview image is a test card, not video) |
 | `/sites/:id/alerts`, `/sites/:id/alerts/:eventId` | Alerts list, evidence viewer, review |
 | `/notifications` | What we told you, delivery status |
 | `/sites`, `/sites/new`, `/sites/:id` | Sites list (deactivate, archive), add a site, site profile |
@@ -66,11 +67,11 @@ integration tests in `apps/backend` (`npm run test:int -w @dbi/backend`), which 
 
 ## Status and known gaps
 
-Done: sites, users and roles, invitations, settings, alerts inbox, notifications, shipments, reports, audit trail. Menu items
-appear only for roles allowed to use them, and every action the API would refuse is hidden or disabled.
-Not yet done: the zone editor still uses the old shutter-style zones (replaced by the AI pipeline work), live view and the
-dashboard counts. The Alerts, Notifications, Shipments, Reports and Audit screens have not yet been checked in a real browser
-(see `CONTEXT_DEV1.md`, section 0).
+Done: sites, users and roles, invitations, settings, alerts inbox, notifications, shipments, reports, audit trail, zone editor,
+live view and dashboard counts. Menu items appear only for roles allowed to use them, and every action the API would refuse is
+hidden or disabled.
+Not yet done: the live view shows a generated test card, not real video. The Alerts, Notifications, Shipments, Reports and Audit
+screens have not yet been checked in a real browser (see `CONTEXT_DEV1.md`, section 0).
 
 Accessibility: DOM audit passes (names, labels, one `h1`, skip link, focus ring, reduced motion, AA contrast for the design
 tokens). Not yet done: screen-reader pass and keyboard walkthrough on a real device.

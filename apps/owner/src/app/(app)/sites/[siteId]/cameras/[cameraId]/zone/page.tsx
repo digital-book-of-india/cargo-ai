@@ -225,7 +225,7 @@ export default function CargoZonePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href={`/sites/${siteId}/cameras`}>
             <ArrowLeft className="mr-1 h-4 w-4" /> Back to Cameras
@@ -329,8 +329,9 @@ export default function CargoZonePage() {
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <div>
-              <label className="font-medium block mb-1">Zone Name</label>
+              <label htmlFor="zone-name" className="font-medium block mb-1">Zone Name</label>
               <input
+                id="zone-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -373,7 +374,9 @@ export default function CargoZonePage() {
                     <button
                       key={cls}
                       type="button"
-                      className="flex items-center gap-2 text-left"
+                      role="checkbox"
+                      aria-checked={checked}
+                      className="flex min-h-7 items-center gap-2 text-left"
                       onClick={() => {
                         if (checked) {
                           if (classes.length > 1) setClasses(classes.filter((c) => c !== cls));
@@ -401,6 +404,7 @@ export default function CargoZonePage() {
               </div>
               <input
                 type="range"
+                aria-label="Minimum confidence"
                 min="0.30"
                 max="0.95"
                 step="0.05"
@@ -414,7 +418,9 @@ export default function CargoZonePage() {
             <div className="pt-2 border-t border-border">
               <button
                 type="button"
-                className="flex items-center gap-2 text-left font-medium"
+                role="checkbox"
+                aria-checked={countOnce}
+                className="flex min-h-7 items-center gap-2 text-left font-medium"
                 onClick={() => setCountOnce(!countOnce)}
               >
                 {countOnce ? (
@@ -433,7 +439,9 @@ export default function CargoZonePage() {
             <div className="pt-2 border-t border-border space-y-3">
               <button
                 type="button"
-                className="flex items-center gap-2 text-left font-medium"
+                role="checkbox"
+                aria-checked={afterHoursEnabled}
+                className="flex min-h-7 items-center gap-2 text-left font-medium"
                 onClick={() => setAfterHoursEnabled(!afterHoursEnabled)}
               >
                 {afterHoursEnabled ? (
@@ -448,8 +456,9 @@ export default function CargoZonePage() {
               {afterHoursEnabled && (
                 <div className="grid grid-cols-2 gap-3 pl-6">
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Start (HH:mm)</label>
+                    <label htmlFor="after-hours-start" className="text-xs text-muted-foreground block mb-1">Start (HH:mm)</label>
                     <input
+                      id="after-hours-start"
                       type="time"
                       value={afterHoursStart}
                       onChange={(e) => setAfterHoursStart(e.target.value)}
@@ -457,8 +466,9 @@ export default function CargoZonePage() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">End (HH:mm)</label>
+                    <label htmlFor="after-hours-end" className="text-xs text-muted-foreground block mb-1">End (HH:mm)</label>
                     <input
+                      id="after-hours-end"
                       type="time"
                       value={afterHoursEnd}
                       onChange={(e) => setAfterHoursEnd(e.target.value)}

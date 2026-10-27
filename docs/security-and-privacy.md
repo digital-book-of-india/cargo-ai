@@ -80,9 +80,9 @@ query strings, bodies or tokens.
 | 4 | The database layer forced Google DNS servers for every deployment. | **Fixed.** Opt-in through `DNS_SERVERS`. |
 | 5 | `npm start` (`node dist/server.js`) could not run: the shared packages are TypeScript source and `tsc` output cannot load them. | **Fixed.** The backend is bundled with esbuild; verified by running the built server. |
 | 6 | Rate limits live in process memory. With more than one API instance each has its own counters. | Open: use one instance, or add a shared store (Redis) before scaling out. |
-| 7 | Evidence is on local disk. | Open: object storage adapter (needs credentials); until then use a persistent, backed-up volume. |
+| 7 | Evidence is on local disk by default. | Adapter for S3-compatible object storage written (`EVIDENCE_STORAGE_DRIVER=s3`); not yet run against a real bucket. Use a private bucket with public access blocked; until then use a persistent, backed-up volume. |
 | 8 | A database password was pasted into a chat during setup. | Open, user action: rotate that Atlas password. |
-| 9 | Dependency vulnerabilities. | CI runs `npm audit` (informational) on every push. |
+| 9 | Dependency vulnerabilities. | Partly fixed: `next` 14.2.35, `express` 4.22.3 and `mongoose` 8.24.7 (patched, non-breaking). Still open: `next` 16 and `zod` 4 fixes are major upgrades, planned as a separate migration. CI runs `npm audit` (informational) on every push. |
 | 10 | No automated accessibility audit. | Open: manual keyboard checks only. |
 
 Reviewed and found sound: every tenant route has an authentication and permission guard; by-id lookups are

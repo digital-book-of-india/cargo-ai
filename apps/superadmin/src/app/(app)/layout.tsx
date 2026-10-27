@@ -72,6 +72,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Sites", href: "/sites" },
     { name: "Camera & AI Health", href: "/health" },
     { name: "Audit Logs", href: "/audit-logs" },
+    { name: "Support Access", href: "/support" },
   ];
 
   if (authChecking) {

@@ -19,17 +19,18 @@
     "restore": "tsx src/ops/restore.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1157.0",
     "@dbi/api-types": "*",
     "@dbi/validation": "*",
     "bcryptjs": "^2.4.3",
     "cors": "2.8.5",
     "dotenv": "16.4.5",
-    "express": "4.21.1",
+    "express": "^4.22.3",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "8.7.1",
+    "mongoose": "^8.24.7",
     "multer": "^2.5.0",
-    "zod": "3.23.8"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -39,8 +40,8 @@
     "@types/multer": "^2.3.0",
     "@types/node": "20.14.10",
     "esbuild": "^0.23.1",
-    "yaml": "^2.5.0",
     "tsx": "4.19.1",
-    "typescript": "5.5.4"
+    "typescript": "5.5.4",
+    "yaml": "^2.5.0"
   }
 }

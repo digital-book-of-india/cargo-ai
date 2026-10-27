@@ -34,7 +34,7 @@ authRouter.post(
   authRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = registerSchema.safeParse(req.body);
-    if (!parsed.success) throw validationError(parsed.error.errors[0]?.message, "Invalid registration data");
+    if (!parsed.success) throw validationError(parsed.error.issues[0]?.message, "Invalid registration data");
 
     const { name, email, password, companyName } = parsed.data;
     const existing = await UserModel.findOne({ email: email.toLowerCase() });
@@ -91,7 +91,7 @@ authRouter.post(
   authRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) throw validationError(parsed.error.errors[0]?.message, "Invalid login data");
+    if (!parsed.success) throw validationError(parsed.error.issues[0]?.message, "Invalid login data");
 
     const { email, password } = parsed.data;
     const user = await UserModel.findOne({ email: email.toLowerCase() });
@@ -123,7 +123,7 @@ authRouter.post(
   authRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = acceptInvitationSchema.safeParse(req.body);
-    if (!parsed.success) throw validationError(parsed.error.errors[0]?.message, "Invalid invitation data");
+    if (!parsed.success) throw validationError(parsed.error.issues[0]?.message, "Invalid invitation data");
 
     const { token, name, password } = parsed.data;
     const invitation = await InvitationModel.findOne({ tokenHash: hashInvitationToken(token) });
@@ -210,7 +210,7 @@ authRouter.patch(
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = updateProfileSchema.safeParse(req.body);
-    if (!parsed.success) throw validationError(parsed.error.errors[0]?.message, "Invalid profile data");
+    if (!parsed.success) throw validationError(parsed.error.issues[0]?.message, "Invalid profile data");
 
     const user = await UserModel.findById(req.user!.id);
     if (!user) throw new AppError(404, "NOT_FOUND", "User not found.");

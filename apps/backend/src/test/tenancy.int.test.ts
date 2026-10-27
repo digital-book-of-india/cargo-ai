@@ -383,13 +383,13 @@ describe("tenancy and roles (integration)", () => {
     });
 
     it("requires the service token", async () => {
-      const res = await api.post("/internal/v1/ai/events", {});
+      const res = await api.post("/internal/v1/ai/cargo-events", {});
       assert.equal(res.status, 401);
     });
 
     it("creates an event for the site's own company and notifies only reviewers with access", async () => {
       const body = payload(unique("evt"));
-      const created = await api.post("/internal/v1/ai/events", body, { headers: headers() });
+      const created = await api.post("/internal/v1/ai/cargo-events", body, { headers: headers() });
       assert.equal(created.status, 202, created.raw);
       const eventId = created.body.data.eventId;
 
@@ -408,7 +408,7 @@ describe("tenancy and roles (integration)", () => {
       assert.ok(!bNotes.body.data.items.some((n: any) => n.eventId === eventId));
 
       // the same event again is not duplicated and returns the same id
-      const again = await api.post("/internal/v1/ai/events", body, { headers: headers() });
+      const again = await api.post("/internal/v1/ai/cargo-events", body, { headers: headers() });
       assert.equal(again.status, 200);
       assert.equal(again.body.data.ingestionStatus, "already_processed");
       assert.equal(again.body.data.eventId, eventId);
@@ -417,7 +417,7 @@ describe("tenancy and roles (integration)", () => {
     it("rejects a camera that does not belong to the site", async () => {
       const cameraB = await addCamera(b, b1.id);
       const res = await api.post(
-        "/internal/v1/ai/events",
+        "/internal/v1/ai/cargo-events",
         payload(unique("evt"), { cameraId: cameraB.id }),
         { headers: headers() }
       );

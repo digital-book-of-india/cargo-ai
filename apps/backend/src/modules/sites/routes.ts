@@ -33,7 +33,7 @@ sitesRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = createSiteSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid site data");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid site data");
     }
     const { name, code, timezone, address } = parsed.data;
     if (timezone !== undefined && !isValidTimezone(timezone)) {
@@ -91,7 +91,7 @@ sitesRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const parsed = updateSiteSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", parsed.error.errors[0]?.message ?? "Invalid site data");
+      throw new AppError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid site data");
     }
     const site = req.site!;
     if (site.status === "ARCHIVED") {

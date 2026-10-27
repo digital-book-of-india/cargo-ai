@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { HHMM, UNMUTABLE_EVENT_TYPES, validateShifts } from "@dbi/api-types";
 
+// Zod 4 words a missing value as "Invalid input: expected string, received undefined". Keep the short message
+// the panels and API clients have always shown.
+z.config({ customError: (issue) => (issue.code === "invalid_type" && issue.input === undefined ? "Required" : undefined) });
+
 export const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(1, "Password is required"),
@@ -223,12 +227,12 @@ export const updateCompanySettingsSchema = z
   .superRefine((value, ctx) => {
     if (value.shifts) {
       const problem = validateShifts(value.shifts);
-      if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem, path: ["shifts"] });
+      if (problem) ctx.addIssue({ code: "custom", message: problem, path: ["shifts"] });
     }
     const blocked = value.notificationRules?.mutedEventTypes.find((t) => UNMUTABLE_EVENT_TYPES.includes(t));
     if (blocked) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "Camera and AI health notices cannot be muted.",
         path: ["notificationRules", "mutedEventTypes"],
       });
