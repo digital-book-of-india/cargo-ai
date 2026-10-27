@@ -416,6 +416,7 @@ class CargoWorker:
         payload = {
             "workerId": WORKER_ID,
             "status": "ONLINE" if any(p.status == "STREAMING" for p in self.pipelines.values()) else ("ONLINE" if not cameras_payload else "DEGRADED"),
+            "sentAt": now_iso,
             "cameras": cameras_payload
         }
         post_json("/internal/v1/monitoring/heartbeat", payload)
@@ -458,3 +459,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

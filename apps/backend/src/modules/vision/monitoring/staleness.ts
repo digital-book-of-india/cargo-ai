@@ -1,14 +1,18 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 import { Types } from "mongoose";
 import { env } from "../../../config/env";
-import { AiWorkerHealthModel, VisionCameraMonitorModel, VisionEventModel } from "../../../models";
+import { AiWorkerHealthModel, CameraModel, VisionCameraMonitorModel, VisionEventModel } from "../../../models";
 
-// Runs inside the API process every 15 s. Duplicate outages are prevented by the eventKey
-// unique index: the key contains the outage start, so one outage produces one event.
 const TICK_MS = 15_000;
 let timer: NodeJS.Timeout | null = null;
 
-type MonitorRow = { siteId: Types.ObjectId; cameraId: Types.ObjectId; lastFrameAt?: Date | null; workerId?: string | null };
+type MonitorRow = {
+  siteId?: Types.ObjectId;
+  shopId?: Types.ObjectId;
+  cameraId: Types.ObjectId;
+  lastFrameAt?: Date | null;
+  workerId?: string | null;
+};
 type WorkerRow = { workerId: string; status: "ONLINE" | "DEGRADED" | "OFFLINE"; lastHeartbeatAt: Date };
 type SystemEventType = "camera_offline" | "ai_service_unavailable";
 
@@ -27,7 +31,7 @@ export function stopVisionMonitorJob(): void {
 
 export async function runStalenessCheck(now: Date = new Date()): Promise<{ cameraOffline: number; aiUnavailable: number }> {
   const monitors = await VisionCameraMonitorModel.find({ enabled: true })
-    .select("siteId cameraId lastFrameAt workerId")
+    .select("siteId shopId cameraId lastFrameAt workerId")
     .lean<MonitorRow[]>();
   if (monitors.length === 0) return { cameraOffline: 0, aiUnavailable: 0 };
 
@@ -64,19 +68,27 @@ export async function runStalenessCheck(now: Date = new Date()): Promise<{ camer
   return { cameraOffline, aiUnavailable };
 }
 
-// Returns true when a new event was written, false when this outage was already recorded.
 async function recordSystemEvent(
   m: MonitorRow,
   eventType: SystemEventType,
   episode: string,
   occurredAt: Date
 ): Promise<boolean> {
+  let siteId = m.siteId || m.shopId;
+  if (!siteId) {
+    const cam = await CameraModel.findById(m.cameraId).select("siteId shopId").lean<{ siteId?: Types.ObjectId; shopId?: Types.ObjectId }>();
+    siteId = cam?.siteId || cam?.shopId;
+  }
+  if (!siteId) {
+    return false;
+  }
+
   const eventKey = `${eventType}:${String(m.cameraId)}:${episode}`;
   try {
     await VisionEventModel.create({
       eventKey,
       payloadHash: crypto.createHash("sha256").update(eventKey).digest("hex"),
-      siteId: m.siteId,
+      siteId,
       cameraId: m.cameraId,
       zoneId: null,
       eventType,

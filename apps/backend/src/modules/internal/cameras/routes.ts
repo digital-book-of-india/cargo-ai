@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from "express";
+﻿import { Router, Request, Response, NextFunction } from "express";
 import { CameraModel, ZoneModel } from "../../../models";
 import { decryptSecret } from "../../../services/secrets/manager";
 
@@ -27,7 +27,7 @@ internalCamerasRouter.get("/", async (_req: Request, res: Response, next: NextFu
 });
 
 // GET /internal/v1/cameras/:cameraId/stream-config
-// The ONLY place the decrypted RTSP URL is ever handed out — service-auth only, never to a browser.
+// The ONLY place the decrypted RTSP URL is ever handed out â€” service-auth only, never to a browser.
 internalCamerasRouter.get(
   "/:cameraId/stream-config",
   async (req: Request, res: Response, next: NextFunction) => {
@@ -46,8 +46,8 @@ internalCamerasRouter.get(
       res.json({
         data: {
           cameraId: camera._id.toString(),
-          companyId: camera.companyId.toString(),
-          siteId: camera.siteId.toString(),
+          companyId: (camera.companyId || (camera as any).shopId || camera._id).toString(),
+          siteId: (camera.siteId || (camera as any).shopId || camera._id).toString(),
           streamUrl,
           zone: zone
             ? {
@@ -64,3 +64,4 @@ internalCamerasRouter.get(
     }
   }
 );
+
