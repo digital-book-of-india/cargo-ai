@@ -58,7 +58,7 @@ const evidenceSchema = new Schema<IEvidenceItem>(
 
 const cargoEventSchema = new Schema<ICargoEventDocument>(
   {
-    companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
+    companyId: { type: Schema.Types.ObjectId, ref: "Company", required: true, index: true },
     siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true },
     cameraId: { type: Schema.Types.ObjectId, ref: "Camera", required: true },
     zoneId: { type: Schema.Types.ObjectId, ref: "VisionZone", default: null },

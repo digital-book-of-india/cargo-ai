@@ -21,7 +21,85 @@ interface CountDecision {
   suppressedReason: string | null;
 }
 
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
 const MAX_ATTEMPTS = 2;
+const LOOKUP_TTL_MS = 60_000;
+
+// In-memory 60s TTL caches to prevent Mongo connection starvation under high ingestion FPS
+const cameraCache = new Map<string, CacheEntry<{ siteId: string; companyId: Types.ObjectId } | null>>();
+const zoneCache = new Map<
+  string,
+  CacheEntry<{
+    _id: Types.ObjectId;
+    siteId: string;
+    cameraId: string;
+    companyId: string;
+    status: string;
+    rules: VisionZoneRules;
+  } | null>
+>();
+
+async function getCachedCamera(cameraId: string): Promise<{ siteId: string; companyId: Types.ObjectId } | null> {
+  const now = Date.now();
+  const cached = cameraCache.get(cameraId);
+  if (cached && now < cached.expiresAt) {
+    return cached.data;
+  }
+
+  const camera = await CameraModel.findById(cameraId).select("siteId companyId").lean<{ siteId: Types.ObjectId; companyId: Types.ObjectId }>();
+  const data = camera ? { siteId: String(camera.siteId), companyId: camera.companyId } : null;
+  cameraCache.set(cameraId, { data, expiresAt: now + LOOKUP_TTL_MS });
+
+  if (cameraCache.size > 2000) {
+    for (const [k, v] of cameraCache.entries()) {
+      if (now > v.expiresAt) cameraCache.delete(k);
+    }
+  }
+
+  return data;
+}
+
+async function getCachedZone(zoneId: string) {
+  const now = Date.now();
+  const cached = zoneCache.get(zoneId);
+  if (cached && now < cached.expiresAt) {
+    return cached.data;
+  }
+
+  const zone = await VisionZoneModel.findById(zoneId).select("siteId cameraId companyId status rules").lean<{
+    _id: Types.ObjectId;
+    siteId: Types.ObjectId;
+    cameraId: Types.ObjectId;
+    companyId: Types.ObjectId;
+    status: string;
+    rules: VisionZoneRules;
+  }>();
+
+  const data = zone
+    ? {
+        _id: zone._id,
+        siteId: String(zone.siteId),
+        cameraId: String(zone.cameraId),
+        companyId: String(zone.companyId),
+        status: zone.status,
+        rules: zone.rules as VisionZoneRules,
+      }
+    : null;
+
+  zoneCache.set(zoneId, { data, expiresAt: now + LOOKUP_TTL_MS });
+
+  if (zoneCache.size > 2000) {
+    for (const [k, v] of zoneCache.entries()) {
+      if (now > v.expiresAt) zoneCache.delete(k);
+    }
+  }
+
+  return data;
+}
 
 export async function ingestVisionEvent(
   input: VisionIngestInput,
@@ -31,9 +109,9 @@ export async function ingestVisionEvent(
     throw new AppError(400, "VALIDATION_ERROR", "Idempotency-Key header must equal eventKey.");
   }
 
-  // Tenant checks use the database only. Resolve camera and companyId.
-  const camera = await CameraModel.findById(input.cameraId).select("siteId companyId").lean();
-  if (!camera || String(camera.siteId) !== input.siteId) {
+  // Tenant checks use cached metadata (60s TTL) to prevent MongoDB thread starvation
+  const camera = await getCachedCamera(input.cameraId);
+  if (!camera || camera.siteId !== input.siteId) {
     throw new AppError(404, "NOT_FOUND", "Camera not found for this site.");
   }
 
@@ -58,18 +136,23 @@ export async function ingestVisionEvent(
   throw new AppError(409, "DUPLICATE_EVENT", "Event was already processed.");
 }
 
-async function loadEnabledZone(zoneId: string, cameraId: string, siteId: string, companyId?: string | Types.ObjectId): Promise<LoadedZone> {
-  const zone = await VisionZoneModel.findById(zoneId).select("siteId cameraId companyId status rules").lean();
-  if (!zone || String(zone.cameraId) !== cameraId || String(zone.siteId) !== siteId) {
+async function loadEnabledZone(
+  zoneId: string,
+  cameraId: string,
+  siteId: string,
+  companyId?: string | Types.ObjectId
+): Promise<LoadedZone> {
+  const zone = await getCachedZone(zoneId);
+  if (!zone || zone.cameraId !== cameraId || zone.siteId !== siteId) {
     throw new AppError(404, "NOT_FOUND", "Zone not found for this camera.");
   }
-  if (companyId && zone.companyId && String(zone.companyId) !== String(companyId)) {
+  if (companyId && zone.companyId && zone.companyId !== String(companyId)) {
     throw new AppError(403, "FORBIDDEN", "Cross-tenant zone access prohibited.");
   }
   if (zone.status !== "active") {
     throw new AppError(422, "BUSINESS_RULE_FAILED", "Zone is not enabled for monitoring.");
   }
-  return { id: String(zone._id), rules: zone.rules as VisionZoneRules };
+  return { id: String(zone._id), rules: zone.rules };
 }
 
 async function findDuplicate(companyId: Types.ObjectId, eventKey: string, payloadHash: string): Promise<IngestOutcome | null> {

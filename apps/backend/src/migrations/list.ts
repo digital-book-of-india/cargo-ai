@@ -9,6 +9,19 @@ import { notificationEventIdAsObjectId } from "./20261101-103-notification-event
 import { uniqueCameraNames } from "./20261101-104-unique-camera-names";
 import { cameraSecretsGcm } from "./20261101-105-camera-secrets-gcm";
 import { archiveOldZones } from "./20261101-106-archive-old-zones";
+import { addLedgerDirectionalIndex } from "./20261101-107-ledger-directional-index";
 
 // Order matters: migrations run top to bottom and roll back bottom to top.
-export const migrations: Migration[] = [createIndexes, archiveLegacyCollections, createShipmentIndexes, createVisionIndexes, sessionsOnVisionZones, addQueryIndexes, notificationEventIdAsObjectId, uniqueCameraNames, cameraSecretsGcm, archiveOldZones];
+export const migrations: Migration[] = [
+  createIndexes,
+  archiveLegacyCollections,
+  createShipmentIndexes,
+  createVisionIndexes,
+  sessionsOnVisionZones,
+  addQueryIndexes,
+  notificationEventIdAsObjectId,
+  uniqueCameraNames,
+  cameraSecretsGcm,
+  archiveOldZones,
+  addLedgerDirectionalIndex,
+];

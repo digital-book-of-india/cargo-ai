@@ -2,6 +2,8 @@ import crypto from "crypto";
 import { Types } from "mongoose";
 import { env } from "../../../config/env";
 import { AiWorkerHealthModel, CameraModel, VisionCameraMonitorModel, VisionEventModel } from "../../../models";
+import { createCargoEvent } from "../../../services/events/createEvent";
+import { errorFields, logger } from "../../../utils/logger";
 
 const TICK_MS = 15_000;
 let timer: NodeJS.Timeout | null = null;
@@ -104,6 +106,23 @@ async function recordSystemEvent(
       evidence: null,
       detector: { name: "monitor", version: "1" },
     });
+
+    // Forward to human review inbox so operators get notified
+    try {
+      await createCargoEvent({
+        eventKey,
+        siteId: String(siteId),
+        cameraId: String(m.cameraId),
+        zoneId: null,
+        eventType: eventType as never,
+        occurredAt: occurredAt.toISOString(),
+        severity: "high",
+        payload: { episode, reason: "staleness_threshold_exceeded" },
+      });
+    } catch (inboxErr) {
+      logger.warn("system event inbox forwarding failed", { eventKey, ...errorFields(inboxErr) });
+    }
+
     return true;
   } catch (err) {
     if ((err as { code?: number } | null)?.code === 11000) return false;

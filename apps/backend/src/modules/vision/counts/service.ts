@@ -148,7 +148,11 @@ export async function listLedger(
   const siteId = parseObjectId(input.siteId, "siteId");
   await assertSiteAccess(req, siteId.toString());
 
+  const companyId = (req as any).tenant?.companyId || (req as any).companyId || (req.user as any)?.companyId;
   const filter: Record<string, any> = { siteId };
+  if (companyId) {
+    filter.companyId = typeof companyId === "string" ? parseObjectId(companyId, "companyId") : companyId;
+  }
   if (input.zoneId) filter.zoneId = parseObjectId(input.zoneId, "zoneId");
   if (input.cameraId) filter.cameraId = parseObjectId(input.cameraId, "cameraId");
   if (input.direction) filter.direction = input.direction;
