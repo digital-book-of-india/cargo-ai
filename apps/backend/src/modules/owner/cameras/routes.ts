@@ -12,6 +12,7 @@ import { auditFromRequest } from "../../../services/audit/logger";
 import { canAccessSite, hasAllSiteAccess } from "../../../services/authz/permissions";
 import { encryptSecret, decryptSecret, sanitizeCamera, buildRtspUrl } from "../../../services/secrets/manager";
 import { isDuplicateKeyError } from "../../../utils/validation";
+import { requestLive, getFrame } from "../../../services/camera/live";
 
 // Mounted at /api/v1/sites -> /:siteId/cameras
 export const siteCamerasRouter = Router();
@@ -331,14 +332,47 @@ cameraRouter.delete(
   })
 );
 
+// POST /api/v1/cameras/:cameraId/live
+// "Someone is watching": the worker uploads about one frame a second for the next 30 seconds.
+cameraRouter.post(
+  "/:cameraId/live",
+  ...requireCameraAccess("cameras:read"),
+  (req: Request, res: Response) => {
+    const until = requestLive(req.params.cameraId);
+    res.json({ data: { expiresAt: new Date(until).toISOString() } });
+  }
+);
+
+// GET /api/v1/cameras/:cameraId/live.jpg - the latest frame the worker uploaded (204 if none yet).
+cameraRouter.get(
+  "/:cameraId/live.jpg",
+  ...requireCameraAccess("cameras:read"),
+  (req: Request, res: Response) => {
+    const frame = getFrame(req.params.cameraId);
+    if (!frame) {
+      res.status(204).end();
+      return;
+    }
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("x-frame-at", String(frame.at));
+    res.type("image/jpeg").send(frame.jpeg);
+  }
+);
+
 // GET /api/v1/cameras/:cameraId/preview
-// Returns an SVG test card used as the backdrop of the zone editor. It is a PLACEHOLDER, not a real frame:
-// it must never be presented as live video (see CONTEXT_DEV1.md, open items).
+// Returns real frame if available; fallback to SVG test card backdrop if camera has not uploaded frames yet.
 cameraRouter.get(
   "/:cameraId/preview",
   ...requireCameraAccess("cameras:read"),
   async (req: Request, res: Response) => {
-    // Generate clean 16:9 SVG test card frame with timestamp & camera ID
+    const frame = getFrame(req.params.cameraId);
+    if (frame) {
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("x-frame-at", String(frame.at));
+      res.type("image/jpeg").send(frame.jpeg);
+      return;
+    }
+
     const timeStr = new Date().toISOString();
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
@@ -346,7 +380,7 @@ cameraRouter.get(
         <line x1="0" y1="360" x2="1280" y2="360" stroke="#334155" stroke-width="2" stroke-dasharray="8 8"/>
         <line x1="640" y1="0" x2="640" y2="720" stroke="#334155" stroke-width="2" stroke-dasharray="8 8"/>
         <circle cx="640" cy="360" r="100" fill="none" stroke="#38bdf8" stroke-width="2"/>
-        <text x="640" y="340" fill="#f8fafc" font-size="28" font-family="sans-serif" font-weight="600" text-anchor="middle">TEST CARD - NOT LIVE VIDEO</text>
+        <text x="640" y="340" fill="#f8fafc" font-size="28" font-family="sans-serif" font-weight="600" text-anchor="middle">WAITING FOR LIVE STREAM...</text>
         <text x="640" y="380" fill="#94a3b8" font-size="18" font-family="sans-serif" text-anchor="middle">ID: ${req.camera!._id.toString()}</text>
         <text x="640" y="680" fill="#64748b" font-size="16" font-family="monospace" text-anchor="middle">${timeStr}</text>
       </svg>

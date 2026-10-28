@@ -1,7 +1,7 @@
-import type { Camera, SaveZoneRequest, Zone } from "@/types";
+﻿import type { Camera, SaveZoneRequest, Zone } from "@/types";
 import { getZoneSavedCameraIds } from "@/lib/utils/storage";
 import { ApiError } from "./errors";
-import { apiRequest } from "./client";
+import { apiRequest, API_BASE_URL } from "./client";
 
 export const camerasApi = {
   register: (
@@ -68,6 +68,21 @@ export const camerasApi = {
     }),
 
   // The saved zone, or null when none was saved yet (the API answers 404 then).
+  // Tells the server someone is watching, so the site PC uploads about a picture a second.
+  requestLive: (cameraId: string) =>
+    apiRequest<{ expiresAt: string }>(`/cameras/${cameraId}/live`, { method: "POST" }),
+
+  // The latest uploaded picture, or null when none has arrived yet (204/404).
+  fetchLiveFrame: async (cameraId: string): Promise<{ blob: Blob; at: number } | null> => {
+    const res = await fetch(`${API_BASE_URL}/cameras/${cameraId}/live.jpg`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (res.status === 204 || res.status === 404) return null;
+    if (!res.ok) throw new ApiError(res.status, "LIVE_FRAME_FAILED", "Could not read the live picture.");
+    return { blob: await res.blob(), at: Number(res.headers.get("x-frame-at")) || Date.now() };
+  },
+
   getZone: async (cameraId: string): Promise<Zone | null> => {
     try {
       const res = await apiRequest<{ zone?: Zone } | Zone>(
