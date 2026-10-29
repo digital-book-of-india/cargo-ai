@@ -16,7 +16,7 @@ jobs:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/api/v1
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: No secrets in tracked files
         run: node scripts/check-secrets.js
       - uses: actions/setup-node@v4
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Backend image
         run: docker build -f infra/docker/backend.Dockerfile -t dbi-backend .
       - name: Owner panel image
@@ -88,7 +88,7 @@ jobs:
     # installed with the panels' dev servers stopped. Remove this line once `npm audit --omit=dev --audit-level=high` is clean.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
