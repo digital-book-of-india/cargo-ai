@@ -1,0 +1,65 @@
+{
+  "name": "@dbi/connector",
+  "version": "0.1.10",
+  "private": true,
+  "author": "Theaft",
+  "description": "Theaft Connector - on-site Windows agent that pairs a site's LAN with the backend, syncs cameras, and will drive attendance/live-view workers.",
+  "main": "src/main.js",
+  "scripts": {
+    "prestart": "node scripts/write-runtime-config.js",
+    "start": "electron .",
+    "predist": "node scripts/write-runtime-config.js && node scripts/prepare-python.js",
+    "dist": "electron-builder --win --publish never",
+    "publish": "npm run dist && node scripts/publish-to-backend.js"
+  },
+  "dependencies": {
+    "electron-log": "^5.2.3",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "app-builder-bin": "^4.2.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.theaft.connector",
+    "productName": "Theaft Connector",
+    "electronVersion": "33.4.11",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "publish": {
+        "provider": "generic",
+        "url": "https://api.theaft.digitalbookofindia.com/downloads/connector"
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "Theaft-Connector-Setup-${version}.exe"
+    },
+    "extraResources": [
+      {
+        "from": "build-resources/python",
+        "to": "python"
+      },
+      {
+        "from": "build-resources/ai-worker",
+        "to": "ai-worker"
+      },
+      {
+        "from": "build-resources/go2rtc",
+        "to": "go2rtc"
+      }
+    ]
+  }
+}

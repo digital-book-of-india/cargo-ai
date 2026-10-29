@@ -21,3 +21,5 @@ export * from "./VisionZone";
 export * from "./VisionEvent";
 export * from "./VisionCountLedger";
 export * from "./VisionCameraMonitor";
+
+export * from "./Connector";

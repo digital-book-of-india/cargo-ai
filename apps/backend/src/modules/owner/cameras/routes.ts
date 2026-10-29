@@ -1,3 +1,5 @@
+import { ConnectorModel, isConnectorOnline } from "../../../models/Connector";
+import { enqueueJob, waitForJob } from "../../../services/connectors/jobs";
 import { Router, Request, Response } from "express";
 import net from "net";
 import { Types } from "mongoose";
@@ -393,3 +395,32 @@ cameraRouter.get(
 
 
 
+
+// POST /api/v1/cameras/:cameraId/webrtc { sdp }
+cameraRouter.post(
+  "/:cameraId/webrtc",
+  ...requireCameraAccess("cameras:read"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const sdp = typeof req.body?.sdp === "string" ? req.body.sdp : "";
+    if (!sdp.startsWith("v=0") || sdp.length > 20000) {
+      throw new AppError(400, "VALIDATION_ERROR", "A valid WebRTC offer is required.");
+    }
+    const camera = req.camera!;
+    const connectorId = (camera as any).connectorId;
+    const connector = connectorId ? await ConnectorModel.findById(connectorId) : null;
+    if (!connector) {
+      throw new AppError(400, "NO_CONNECTOR", "This camera is not assigned to a Connector.");
+    }
+    if (!isConnectorOnline(connector)) {
+      throw new AppError(409, "CONNECTOR_OFFLINE", "The Connector PC is offline.");
+    }
+
+    const rawSecret = decryptSecret(camera.secretRef);
+    const jobId = enqueueJob(connector._id.toString(), camera._id.toString(), "WEBRTC", rawSecret, sdp);
+    const result = await waitForJob(jobId, 15000);
+    if (!result || typeof result.answer !== "string") {
+      throw new AppError(502, "WEBRTC_FAILED", "Could not start live video. Showing pictures instead.");
+    }
+    res.json({ data: { answer: result.answer } });
+  })
+);

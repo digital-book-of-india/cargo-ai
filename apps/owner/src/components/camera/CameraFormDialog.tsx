@@ -1,5 +1,7 @@
 "use client";
 
+import { connectorsApi, Connector } from "@/lib/api/connectors";
+
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { ShieldAlert } from "lucide-react";
@@ -21,6 +23,7 @@ import { CONSENT_LABEL, PRIVACY_POINTS } from "@/lib/privacy";
 import type { Camera } from "@/types";
 
 export interface CameraFormValues {
+  connectorId?: string | null;
   name: string;
   protocol: "RTSP" | "ONVIF";
   /** empty string when editing and the connection is left unchanged */
@@ -45,6 +48,8 @@ interface Props {
 export function CameraFormDialog({ open, onOpenChange, siteId, camera, onSubmit }: Props) {
   const editing = !!camera;
   const [name, setName] = useState("");
+  const [connectorId, setConnectorId] = useState<string>("");
+  const [connectors, setConnectors] = useState<Connector[]>([]);
   const [protocol, setProtocol] = useState<"RTSP" | "ONVIF">("RTSP");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
@@ -58,6 +63,8 @@ export function CameraFormDialog({ open, onOpenChange, siteId, camera, onSubmit 
 
   useEffect(() => {
     if (!open) return;
+    connectorsApi.list(siteId).then((r) => setConnectors(r.connectors)).catch(() => setConnectors([]));
+    setConnectorId((camera as any)?.connectorId ?? "");
     setName(camera?.name ?? "");
     setProtocol(camera?.protocol ?? "RTSP");
     setHost("");
@@ -107,6 +114,7 @@ export function CameraFormDialog({ open, onOpenChange, siteId, camera, onSubmit 
     setSubmitting(true);
     try {
       await onSubmit({
+        connectorId: connectorId || null,
         name: name.trim(),
         protocol,
         host: hostValue,
@@ -154,8 +162,27 @@ export function CameraFormDialog({ open, onOpenChange, siteId, camera, onSubmit 
               disabled={submitting}
             />
 
-            <SelectField
-              label="Connection type"
+            
+          <SelectField
+            label="Connector (site PC)"
+            value={connectorId || "__none"}
+            onValueChange={(v) => setConnectorId(v === "__none" ? "" : v)}
+            options={[
+              { value: "__none", label: "Not assigned yet" },
+              ...connectors.map((c) => ({
+                value: c.id,
+                label: `${c.name}${c.online ? " (online)" : ""}`,
+              })),
+            ]}
+            hint={
+              connectors.length === 0
+                ? "No connectors yet - connect an on-site PC first or assign later."
+                : "The on-site PC running go2rtc that pulls this camera's RTSP stream."
+            }
+            disabled={submitting}
+          />
+
+          <SelectField label="Connection type"
               value={protocol}
               onValueChange={(v) => setProtocol(v as "RTSP" | "ONVIF")}
               options={[

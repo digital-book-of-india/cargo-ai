@@ -41,6 +41,12 @@ function positiveIntOrZero(name: string, fallback: number): number {
 const jwtAccessSecret = secret("JWT_ACCESS_SECRET", "default_dev_jwt_secret_key_12345");
 
 export const env = {
+  connectorPairingCodeTtlMinutes: 15,
+  connectorStaleSeconds: 60,
+  // Cloudflare Realtime TURN (WebRTC live view behind NAT)
+  cfTurnKeyId: process.env.CF_TURN_KEY_ID ?? "",
+  cfTurnApiToken: process.env.CF_TURN_API_TOKEN ?? "",
+
   port: Number(process.env.PORT ?? 4000),
   nodeEnv,
   isProduction, // true for anything except NODE_ENV=development|test

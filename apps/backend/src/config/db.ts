@@ -2,8 +2,7 @@ import mongoose from "mongoose";
 import { env } from "./env";
 import dns from "node:dns";
 
-// Some networks cannot resolve the SRV records of mongodb+srv:// addresses. Set DNS_SERVERS (for example
-// "8.8.8.8,8.8.4.4") to use specific resolvers; by default the system resolvers are used.
+
 const dnsServers = (process.env.DNS_SERVERS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 if (dnsServers.length > 0) dns.setServers(dnsServers);
 
@@ -34,6 +33,4 @@ export async function connectDatabase(): Promise<void> {
 export async function disconnectDatabase(): Promise<void> {
   await mongoose.disconnect();
 }
-
-
 

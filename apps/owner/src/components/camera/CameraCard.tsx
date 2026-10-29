@@ -95,6 +95,7 @@ export function CameraCard({
 
         {canManage && (
         <div className="flex shrink-0 flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm"><Link href={`/sites/${siteId}/cameras/live`}>Live View</Link></Button>
           <Button variant="outline" size="sm" onClick={onEdit} disabled={busy}>
             <Pencil aria-hidden /> Edit
           </Button>

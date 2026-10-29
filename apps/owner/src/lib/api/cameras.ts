@@ -4,6 +4,17 @@ import { ApiError } from "./errors";
 import { apiRequest, API_BASE_URL } from "./client";
 
 export const camerasApi = {
+
+  // ICE servers (STUN, plus Cloudflare TURN when configured) for WebRTC live view
+  iceServers: async (): Promise<{ iceServers: RTCIceServer[] }> => {
+    const res = await apiRequest<{ iceServers: RTCIceServer[] }>("/webrtc/ice");
+    return { iceServers: res.iceServers ?? [] };
+  },
+
+  // WebRTC signaling: our offer in, the Connector's answer out.
+  webrtcOffer: (cameraId: string, sdp: string) =>
+    apiRequest<{ answer: string }>(`/cameras/${cameraId}/webrtc`, { method: "POST", body: { sdp } }),
+
   register: (
     siteId: string,
     input: {

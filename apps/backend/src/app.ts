@@ -1,3 +1,6 @@
+import { webrtcRouter } from "./modules/webrtc/routes";
+import { connectorPairingRouter, connectorDeviceRouter } from "./modules/internal/connectors/routes";
+import { connectorAuth } from "./middleware/connectorAuth";
 import cors from "cors";
 import express from "express";
 import compression from "compression";
@@ -183,6 +186,15 @@ internal.use("/cameras", internalCamerasRouter);
 internal.use("/evidence", evidenceUploadRouter);
 
 app.use("/api/v1", v1);
+
+  v1.use("/webrtc", webrtcRouter);
+
+  const connectorDevice = express.Router();
+  connectorDevice.use(connectorAuth);
+  connectorDevice.use("/", connectorDeviceRouter);
+  app.use("/internal/v1/connectors/pair", connectorPairingRouter);
+  app.use("/internal/v1/connectors", connectorDevice);
+
 app.use("/internal/v1", internal);
 
 // 7. Unknown routes, then the global error handler

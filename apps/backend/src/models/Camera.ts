@@ -2,6 +2,7 @@ import mongoose, { Schema, model, Document, Types } from "mongoose";
 import { CameraStatus } from "@dbi/api-types";
 
 export interface ICameraDocument extends Document {
+  connectorId?: Types.ObjectId | null;
   _id: Types.ObjectId;
   companyId: Types.ObjectId;
   siteId: Types.ObjectId;
