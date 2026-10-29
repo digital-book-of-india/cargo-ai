@@ -38,7 +38,7 @@ jobs:
         run: npm run lint -w @dbi/owner
       - name: Unit tests (owner panel, super admin and backend)
         run: npm test
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: AI worker tests
